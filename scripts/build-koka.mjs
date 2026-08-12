@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 
 const rootDir = resolve(new URL("..", import.meta.url).pathname);
-const sourceDir = resolve(rootDir, "koka");
+const sourceDir = rootDir;
 const outputDir = resolve(rootDir, "src/generated/koka");
 const wrapperPath = resolve(rootDir, "src/generated/koka-entry.mjs");
 const wrapperTypesPath = resolve(rootDir, "src/generated/koka-entry.d.ts");
@@ -17,13 +17,14 @@ const sourcePath = "app.kk";
 
 rmSync(outputDir, { force: true, recursive: true });
 mkdirSync(outputDir, { recursive: true });
+rmSync(wrapperTypesPath, { force: true });
 
 const result = spawnSync(
   "koka",
   [
     "--target=jsweb",
     "--library",
-    "--builddir=../.koka-build",
+    "--builddir=.koka-build",
     `--outputdir=${outputDir}`,
     "--output=koka-app",
     sourcePath,
@@ -57,18 +58,6 @@ writeFileSync(
   wrapperPath,
   [
     `export { boot, dispatch__click__bridge as dispatchClick, dispatch__input__bridge as dispatchInput, dispatch__route__bridge as dispatchRoute } from './koka/${entryFile}';`,
-    "",
-  ].join("\n"),
-  "utf8",
-);
-
-writeFileSync(
-  wrapperTypesPath,
-  [
-    "export function boot(id: string): void;",
-    "export function dispatchClick(payload: string): void;",
-    "export function dispatchInput(channel: string, value: string): void;",
-    "export function dispatchRoute(routeName: string): void;",
     "",
   ].join("\n"),
   "utf8",
