@@ -46,6 +46,7 @@ pub fun ambient_filter_test() : <div> test_result
   Test_result("Ambient filter previews", "active=" ++ active_count.show ++ ", done=" ++ done_count.show, active_count == 2 && done_count == 1)
 
 pub fun registered_input_handler_test() : <div> test_result
+  with with_test_browser(False, "T+0")
   val (next_frame, _panel_node, _effects, handlers) = run_runtime_render(current_runtime_frame(initial_model(), Nil), run_todo_panel)
   val next_item = runtime_frame/owner(next_frame)
   val next_runtime_tree = runtime_frame/runtime_tree(next_frame)
@@ -161,6 +162,7 @@ pub fun harness_cancel_edit_test() : <div> test_result
 // Verify that an input event fired via harness updates the model and is reflected
 // in the re-rendered vnode's value attribute.
 pub fun harness_draft_input_test() : <div> test_result
+  with with_test_browser(False, "T+0")
   val h0 = todo_harness(initial_model())
   val h1 = harness_fire_named_input(h0, "draft-input", "typed via harness", todo_harness_render)
   val input_value = match vnode_find_attr_value(h1.tree, "data-k-effect", "draft")

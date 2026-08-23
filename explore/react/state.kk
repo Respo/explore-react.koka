@@ -32,7 +32,7 @@ pub effect listener_registry<s,e::E>
 
 pub type listener_registration<s,e::E>
   Click_registration(semantic_name : string, run : (s) -> <div|e> s)
-  Input_registration(semantic_name : string, run : (string, s) -> <local_state_read,local_state_write,div> s)
+  Input_registration(semantic_name : string, run : (string, s) -> <div|e> s)
   Enter_registration(semantic_name : string, run : (s) -> <div|e> s)
 
 pub struct state_slot(path : string)
@@ -48,7 +48,7 @@ pub struct state_entry(path : string, schema : string, version : int, payload : 
 pub struct action_codec<a>(schema : string, version : int, decode : (int, string) -> maybe<a>, encode : (a) -> string)
 pub struct state_action(target : string, schema : string, version : int, payload : string)
 pub struct store_spec<s,a>(name : string, state_codec : state_codec<s>, action_codec : action_codec<a>, reduce : (s, a) -> s)
-pub struct store_binding<s,a>(current : s, send : (a) -> <local_state_write,div> ())
+pub alias store_dispatch<a> = (a) -> <local_state_write,div> ()
 
 inline extern snapshot_escape(text : string) : string
   js inline "encodeURIComponent(#1)"
@@ -61,8 +61,8 @@ inline extern snapshot_unescape_valid(text : string) : bool
 
 pub struct scheduled_effect(path : string, run : () -> io ())
 pub struct registered_click<s,e::E>(id : string, semantic_name : string, run : (s) -> <div|e> s)
-pub struct registered_input<s>(id : string, semantic_name : string, run : (string, s) -> <local_state_read,local_state_write,div> s)
-pub struct event_registry<s,e::E>(clicks : list<registered_click<s,e>>, inputs : list<registered_input<s>>, warnings : list<string>)
+pub struct registered_input<s,e::E>(id : string, semantic_name : string, run : (string, s) -> <div|e> s)
+pub struct event_registry<s,e::E>(clicks : list<registered_click<s,e>>, inputs : list<registered_input<s,e>>, warnings : list<string>)
 struct hook_frame(scope_name : string, next_state_index : int, next_effect_index : int)
 
 fun state_codec_read(item : state_codec<a>, entry : state_entry) : maybe<a>
@@ -127,7 +127,7 @@ pub val bool/state_codec : state_codec<bool> = State_codec(
 pub fun run_registered_click<s,e::E>(item : registered_click<s,e>, owner : s) : <div|e> s
   item.run.(owner)
 
-pub fun run_registered_input<s>(item : registered_input<s>, value : string, owner : s) : <local_state_read,local_state_write,div> s
+pub fun run_registered_input<s,e::E>(item : registered_input<s,e>, value : string, owner : s) : <div|e> s
   item.run.(value, owner)
 
 pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
@@ -152,7 +152,7 @@ fun append_registered_click<s,e::E>(items : list<registered_click<s,e>>, item : 
     Nil -> [item]
     Cons(head, rest) -> Cons(head, append_registered_click(rest, item))
 
-fun append_registered_input<s>(items : list<registered_input<s>>, item : registered_input<s>) : <div> list<registered_input<s>>
+fun append_registered_input<s,e::E>(items : list<registered_input<s,e>>, item : registered_input<s,e>) : <div> list<registered_input<s,e>>
   match items
     Nil -> [item]
     Cons(head, rest) -> Cons(head, append_registered_input(rest, item))
@@ -170,7 +170,7 @@ fun merge_registered_clicks<s,e::E>(left : list<registered_click<s,e>>, right : 
         Just(found) -> merge_registered_clicks(replace_registered_click(left, item), rest, Cons(if registered_click/semantic_name(found) == registered_click/semantic_name(item) then duplicate_listener_warning(registered_click/id(item), registered_click/semantic_name(item)) else semantic_drift_warning(registered_click/id(item), registered_click/semantic_name(found), registered_click/semantic_name(item)), warnings))
         Nothing -> merge_registered_clicks(append_registered_click(left, item), rest, warnings)
 
-fun merge_registered_inputs<s>(left : list<registered_input<s>>, right : list<registered_input<s>>, warnings : list<string>) : <div> (list<registered_input<s>>, list<string>)
+fun merge_registered_inputs<s,e::E>(left : list<registered_input<s,e>>, right : list<registered_input<s,e>>, warnings : list<string>) : <div> (list<registered_input<s,e>>, list<string>)
   match right
     Nil -> (left, warnings)
     Cons(item, rest) ->
@@ -193,7 +193,7 @@ fun append_registered_clicks<s,e::E>(left : list<registered_click<s,e>>, right :
     Nil -> right
     Cons(head, rest) -> Cons(head, append_registered_clicks(rest, right))
 
-fun append_registered_inputs<s>(left : list<registered_input<s>>, right : list<registered_input<s>>) : <div> list<registered_input<s>>
+fun append_registered_inputs<s,e::E>(left : list<registered_input<s,e>>, right : list<registered_input<s,e>>) : <div> list<registered_input<s,e>>
   match left
     Nil -> right
     Cons(head, rest) -> Cons(head, append_registered_inputs(rest, right))
@@ -218,19 +218,19 @@ fun find_click_by_semantic_in_list<s,e::E>(items : list<registered_click<s,e>>, 
       if registered_click/semantic_name(item) == semantic then Just(item)
       else find_click_by_semantic_in_list(rest, semantic)
 
-pub fun find_registered_input<s,e::E>(registry : event_registry<s,e>, target_id : string) : <div> maybe<registered_input<s>>
+pub fun find_registered_input<s,e::E>(registry : event_registry<s,e>, target_id : string) : <div> maybe<registered_input<s,e>>
   find_input_in_list(event_registry/inputs(registry), target_id)
 
-fun find_input_in_list<s>(items : list<registered_input<s>>, target_id : string) : <div> maybe<registered_input<s>>
+fun find_input_in_list<s,e::E>(items : list<registered_input<s,e>>, target_id : string) : <div> maybe<registered_input<s,e>>
   match items
     Nil -> Nothing
     Cons(item, rest) -> if registered_input/id(item) == target_id then Just(item) else find_input_in_list(rest, target_id)
 
 // Find the first registered input whose semantic name matches.
-pub fun find_registered_input_by_semantic<s,e::E>(registry : event_registry<s,e>, semantic : string) : <div> maybe<registered_input<s>>
+pub fun find_registered_input_by_semantic<s,e::E>(registry : event_registry<s,e>, semantic : string) : <div> maybe<registered_input<s,e>>
   find_input_by_semantic_in_list(event_registry/inputs(registry), semantic)
 
-fun find_input_by_semantic_in_list<s>(items : list<registered_input<s>>, semantic : string) : <div> maybe<registered_input<s>>
+fun find_input_by_semantic_in_list<s,e::E>(items : list<registered_input<s,e>>, semantic : string) : <div> maybe<registered_input<s,e>>
   match items
     Nil -> Nothing
     Cons(item, rest) ->
@@ -248,7 +248,7 @@ fun count_click_items<s,e::E>(items : list<registered_click<s,e>>) : <div> int
 pub fun count_registered_inputs<s,e::E>(registry : event_registry<s,e>) : <div> int
   count_input_items(event_registry/inputs(registry))
 
-fun count_input_items<s>(items : list<registered_input<s>>) : <div> int
+fun count_input_items<s,e::E>(items : list<registered_input<s,e>>) : <div> int
   match items
     Nil -> 0
     Cons(_, rest) -> 1 + count_input_items(rest)
@@ -262,7 +262,7 @@ fun compare_click_semantics<s,e::E>(previous : list<registered_click<s,e>>, next
         Just(found) -> if registered_click/semantic_name(found) == registered_click/semantic_name(item) then tail else Cons(semantic_drift_warning(registered_click/id(item), registered_click/semantic_name(found), registered_click/semantic_name(item)), tail)
         Nothing -> tail
 
-fun compare_input_semantics<s>(previous : list<registered_input<s>>, next : list<registered_input<s>>) : <div> list<string>
+fun compare_input_semantics<s,e::E>(previous : list<registered_input<s,e>>, next : list<registered_input<s,e>>) : <div> list<string>
   match next
     Nil -> Nil
     Cons(item, rest) ->
@@ -308,11 +308,11 @@ pub fun component(scope_name : string, render : () -> <hook_scope|e> a) : <hook_
 
 // Use this for root-owned keyed components so business code does not have to spell
 // `component(component_local_path(...), ...)` just to declare one stable component boundary.
-pub fun component_root(group_name : string, key_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component(component_local_path(group_name, key_name), render)
+pub fun component_root(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
+  component(component_local_path(group, key), render)
 
-pub fun component_in(group_name : string, key_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component(child_scope(current_hook_scope_name(), group_name, key_name), render)
+pub fun component_in(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
+  component(child_scope(current_hook_scope_name(), group, key), render)
 
 // Render a keyed collection of child components without exposing scope-path
 // construction or repeating a one-line `map(... component_in(...))` helper.
@@ -322,7 +322,7 @@ pub fun components<a,e>(
   key : (a) -> string,
   render : (a) -> <hook_scope|e> vnode
 ) : <hook_scope|e> list<vnode>
-  map(items, fn(item) component_in(group, key(item), fn() render(item)))
+  map(items, fn(item) component_in(group, key(item)) { render(item) })
 
 pub fun component_local_path(group_name : string, key_name : string) : string
   component_child_path("", group_name, key_name)
@@ -342,13 +342,13 @@ pub fun state<a>(name : string, initial : a, ?state_codec : state_codec<a>) : <h
 pub fun state_pair<a>(name : string, initial : a, ?state_codec : state_codec<a>) : <hook_scope,local_state_read,div> (a, (a) -> <local_state_write,div> ())
   use_named_state_pair(local_named_state_slot(name), initial)
 
-// Reducer-backed local state. A component emits typed actions instead of
-// coordinating several setters, while the runtime stores one versioned cell.
-pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_state_read,div> store_binding<s,a>
+// Reducer-backed local state follows the familiar `(state, dispatch)` shape.
+// The runtime still stores one typed, versioned cell behind that small surface.
+pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_state_read,div> (s, store_dispatch<a>)
   val entry_slot = local_named_state_slot(spec.name)
   val codec = spec.state_codec
   val current = use_named_state(entry_slot, codec, initial)
-  Store_binding(current, fn(action) update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action)))
+  (current, fn(action) update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action)))
 
 // Store access outside a component render still speaks in typed state/actions.
 // Scope and serialization stay inside the framework boundary.
@@ -426,7 +426,7 @@ pub fun on_scoped_click<s,e::E>(scope_base : string, listener_name : string, sem
 pub fun on_local_click<s,e::E>(name : string, action : (s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Click_event, name), Click_registration(name, action))
 
-pub fun on_local_input<s,e::E>(name : string, action : (string, s) -> <local_state_read,local_state_write,div> s) : <hook_scope,listener_registry<s,e>,div> listener
+pub fun on_local_input<s,e::E>(name : string, action : (string, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Input_event, name), Input_registration(name, action))
 
 pub fun on_local_enter<s,e::E>(name : string, action : (s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
@@ -440,17 +440,20 @@ pub fun on_action_click<s,a,e::E>(name : string, action : a, dispatch : (a, s) -
 pub fun on_action_enter<s,a,e::E>(name : string, action : a, dispatch : (a, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   on_local_enter(name, fn(owner) dispatch(action, owner))
 
+pub fun on_action_input<s,a,e::E>(name : string, action : (string) -> a, dispatch : (a, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
+  on_local_input(name, fn(value, owner) dispatch(action(value), owner))
+
 // Common reducer-backed controls only emit a typed component action and leave
 // the owner unchanged. These helpers keep that event plumbing out of views.
-pub fun on_store_click<s,t,a,e::E>(name : string, binding : store_binding<t,a>, action : a) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
+pub fun on_store_click<s,a,e::E>(name : string, action : a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
   on_local_click(name, fn(owner) {
-    binding.send.(action)
+    dispatch(action)
     owner
   })
 
-pub fun on_store_input<s,t,a,e::E>(name : string, binding : store_binding<t,a>, action : (string) -> a) : <hook_scope,listener_registry<s,e>,div> listener
+pub fun on_store_input<s,a,e::E>(name : string, action : (string) -> a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
   on_local_input(name, fn(value, owner) {
-    binding.send.(action(value))
+    dispatch(action(value))
     owner
   })
 
@@ -459,7 +462,7 @@ fun replace_registered_click<s,e::E>(items : list<registered_click<s,e>>, next_i
     Nil -> [next_item]
     Cons(item, rest) -> if registered_click/id(item) == registered_click/id(next_item) then Cons(next_item, rest) else Cons(item, replace_registered_click(rest, next_item))
 
-fun replace_registered_input<s>(items : list<registered_input<s>>, next_item : registered_input<s>) : <div> list<registered_input<s>>
+fun replace_registered_input<s,e::E>(items : list<registered_input<s,e>>, next_item : registered_input<s,e>) : <div> list<registered_input<s,e>>
   match items
     Nil -> [next_item]
     Cons(item, rest) -> if registered_input/id(item) == registered_input/id(next_item) then Cons(next_item, rest) else Cons(item, replace_registered_input(rest, next_item))
@@ -532,6 +535,18 @@ pub fun run_stateful_component<s,e::E,a>(
   val (current_owner, next_tree, result, pending_effects, handlers) = run_stateful_component_with_tree(owner, current_component_state_entries(), render)
   replace_component_state_entries(next_tree)
   (current_owner, result, pending_effects, handlers)
+
+// App integration normally needs one stable root scope around a stateful
+// component. Callers label identity and render so the boundary stays
+// self-describing instead of exposing nested runtime plumbing.
+pub fun run_component<s,e::E,a>(
+  owner : s,
+  group : string,
+  key : string,
+  render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> a
+) : <component_runtime,div> (s, a, list<scheduled_effect>, event_registry<s,e>)
+  run_stateful_component(owner) fn(current)
+    component_root(group, key) { render(current) }
 
 pub fun read_local_state(tree : list<state_entry>, action : () -> <local_state_read,div|e> a) : <div|e> a
   with fun use_named_state(entry_slot, codec, fallback) state_value(tree, entry_slot, fallback, codec)

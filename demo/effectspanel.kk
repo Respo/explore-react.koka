@@ -43,7 +43,10 @@ fun core_effect_cases(item : model) : <div> list<vnode>
 
 fun route_effect_cases(item : model, results : list<test_result>) : effects_view_effect list<vnode>
   if item.route_name == "effects-dialogs" then
-    [effect_case("Dialog overlays", "Inspired by the MoonBit and Rust explore-react demos: trigger controlled alert, prompt, dialog, and drawer surfaces without leaving the app tree.", component_in("dialogs", "demo", fn() dialog_demo_case(item)))]
+    [effect_case(
+      "Dialog overlays",
+      "Inspired by the MoonBit and Rust explore-react demos: trigger controlled alert, prompt, dialog, and drawer surfaces without leaving the app tree.",
+      component_in(group = "dialogs", key = "demo", render = fn() dialog_demo_case(item)))]
   else if item.route_name == "effects-workflow" then
     [effect_case("Workflow lab", "The richer demo composes `wait_ms`, mocked server fetch/send, and an ambient operator identity into one deterministic workflow.", case_detail("Workflow sync captures waits", "workflow-empty", "workflow-detail", "Workflow case unavailable.", results))]
   else if item.route_name == "effects-state" then
@@ -67,4 +70,8 @@ fun effects_panel(item : model, results : list<test_result>) : effects_view_effe
   ], title = "Effects", note = effects_panel_note(item.route_name), key = "effects", class_name = "effects-panel")
 
 pub fun run_effects_panel(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_stateful_component(item, fn(owner) component_root("effects", "panel", fn() effects_panel(owner, results)))
+  run_component(
+    item,
+    group = "effects",
+    key = "panel",
+    render = fn(owner) effects_panel(owner, results))

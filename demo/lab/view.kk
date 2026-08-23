@@ -26,8 +26,7 @@ fun status_class(item : incident) : string
 
 fun incident_card(item : incident) : lab_view_effect vnode
   val iid = incident/id(item)
-  val local = use_store(incident_local_store, initial = Incident_local_state(False, ""))
-  val Incident_local_state(expanded, draft) = local.current
+  val (Incident_local_state(expanded, draft), dispatch_local) = use_store(incident_local_store, initial = Incident_local_state(False, ""))
   val toggle_label = if expanded then "Collapse" else "Expand"
   val preview_text = if draft == "" then "local draft: <empty>" else "local draft: " ++ draft
   val collapsed_text = if draft == "" then "Draft is local and still empty." else "Draft saved locally for this card."
@@ -51,8 +50,8 @@ fun incident_card(item : incident) : lab_view_effect vnode
       ], class = "incident-badges"),
     ], class = "incident-head"),
     div([
-      button(toggle_label, class = "button", click = on_store_click("toggle-expanded", local, Toggle_incident)),
-      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", local, Change_incident_draft), enter = on_action_enter("send-reply", action = Send_reply(iid), dispatch = dispatch_lab_action), placeholder = "Local reply draft, per card..."),
+      button(toggle_label, class = "button", click = on_store_click("toggle-expanded", action = Toggle_incident, dispatch = dispatch_local)),
+      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", action = Change_incident_draft, dispatch = dispatch_local), enter = on_action_enter("send-reply", action = Send_reply(iid), dispatch = dispatch_lab_action), placeholder = "Local reply draft, per card..."),
       button("Send reply", class = "button button-primary", click = on_action_click("send-reply", action = Send_reply(iid), dispatch = dispatch_lab_action)),
     ], class = "incident-controls"),
     detail_node,
@@ -74,12 +73,23 @@ fun lab_panel_note(route_name : string) : string
   else "Board keeps the incident workflow, local drafts, activity log, and staged sync actions together without the search and bridge demos crowding the same page."
 
 fun lab_panel_sections(route_name : string, lab : workflow_lab) : lab_view_effect list<vnode>
-  if route_name == "lab-search" then {
-    val submit_listener = on_action_enter("submit-search", action = Submit_search, dispatch = dispatch_lab_action)
-    [render_search_panel(lab.search_demo, submit_listener, fn(query) dispatch_lab_click(Search_for(query)))]
-  }
+  if route_name == "lab-search" then
+    [render_search_panel(
+      lab.search_demo,
+      on_input = on_action_input("search-query", action = Change_search_query, dispatch = dispatch_lab_action),
+      on_submit = on_action_enter("submit-search", action = Submit_search, dispatch = dispatch_lab_action),
+      on_select = fn(menu_item) on_action_click(
+        "search-" ++ search_menu_item/id(menu_item),
+        action = Search_for(search_menu_item/query_hint(menu_item)),
+        dispatch = dispatch_lab_action))]
   else if route_name == "lab-bridge" then
-    [render_bridge_panel(lab.bridge_demo, summary_chip, fn(case_name) dispatch_lab_click(Load_bridge_case(case_name)))]
+    [render_bridge_panel(
+      lab.bridge_demo,
+      summary = summary_chip,
+      on_select = fn(case_name) on_action_click(
+        "bridge-" ++ case_name,
+        action = Load_bridge_case(case_name),
+        dispatch = dispatch_lab_action))]
   else
     [
       div([

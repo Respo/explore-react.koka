@@ -13,8 +13,7 @@ alias todo_view_effect = <hook_scope,local_state_read,hook_effects,listener_regi
 
 fun task_item_view(item : task) : todo_view_effect vnode
   val tid = task/id(item)
-  val editor = use_store(task_editor_store, initial = Task_editor_state(False, item.title))
-  val Task_editor_state(editing, draft) = editor.current
+  val (Task_editor_state(editing, draft), dispatch_editor) = use_store(task_editor_store, initial = Task_editor_state(False, item.title))
   val dispatch = fn(action, owner) dispatch_task_item_action(action, item, owner)
   state_effect(name = "focus-editor", deps = [tid.show, if editing then "editing" else "idle"], action = fn() {
     if editing then {
@@ -24,7 +23,7 @@ fun task_item_view(item : task) : todo_view_effect vnode
   })
   val detail = if editing then
       div([
-        input_text(draft, key = "task-draft-" ++ tid.show, class = "input", data_effect = "task-draft-" ++ tid.show, input = on_store_input("draft-input", editor, Change_draft), enter = on_action_enter("save-edit", action = Save_task, dispatch = dispatch), placeholder = "Edit title locally before saving..."),
+        input_text(draft, key = "task-draft-" ++ tid.show, class = "input", data_effect = "task-draft-" ++ tid.show, input = on_store_input("draft-input", action = Change_draft, dispatch = dispatch_editor), enter = on_action_enter("save-edit", action = Save_task, dispatch = dispatch), placeholder = "Edit title locally before saving..."),
       ], class = "task-main")
     else
       div([

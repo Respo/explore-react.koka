@@ -10,6 +10,7 @@ pub struct search_case
   timeout_delay : int
 
 pub struct search_menu_item
+  id : string
   title : string
   route_hint : string
   note : string
@@ -62,48 +63,56 @@ fun search_cases() : list<search_case>
 fun menu_catalog() : list<search_menu_item>
   [
     Search_menu_item(
+      "edge-auth",
       "Edge auth bundle",
       "#lab-bridge",
       "Staged shell/detail bridge around auth drift at the edge POPs.",
       "edge",
       ["edge", "auth", "cache", "login"]),
     Search_menu_item(
+      "edge-rollout",
       "Edge rollout timeline",
       "#lab-bridge",
       "Transition timeline for warmup, rollout, and stale-shell recovery.",
       "edge",
       ["edge", "rollout", "traffic", "warmup"]),
     Search_menu_item(
+      "queue-drain",
       "Queue drain console",
       "#lab-bridge",
       "Replay ownership handoff and worker drain visibility.",
       "queue",
       ["queue", "replay", "worker", "drain"]),
     Search_menu_item(
+      "queue-ownership",
       "Queue ownership audit",
       "#lab-board",
       "Backpressure notes for cache-safe ownership swaps.",
       "queue",
       ["queue", "ownership", "backpressure", "cache-safe"]),
     Search_menu_item(
+      "image-burst",
       "Image burst monitor",
       "#lab-bridge",
       "Thumbnail worker warmup under burst traffic.",
       "image",
       ["image", "thumbnail", "burst", "warmup"]),
     Search_menu_item(
+      "image-cache",
       "Image variant cache",
       "#lab-board",
       "Derived variant refill and cache tail-latency notes.",
       "image",
       ["image", "variant", "thumbnail", "cache"]),
     Search_menu_item(
+      "dialog-drawer",
       "Dialog overlay drawer",
       "#effects-dialogs",
       "Dismiss bridge, ESC support, and animated drawer exit.",
       "dialog",
       ["dialog", "drawer", "overlay", "escape"]),
     Search_menu_item(
+      "prompt-validation",
       "Prompt validation flow",
       "#effects-dialogs",
       "Prompt focus effect and validation round-trip.",
@@ -180,23 +189,23 @@ pub fun search_case_summary(query : string) : <div> string
 pub fun search_menu_matches_query(item : search_menu_item, query : string) : <div> bool
   item_prefix_matches(item, query)
 
-fun search_dropdown_item(item : search_menu_item, index : int, dispatch_search : string -> listener) : <div> vnode
+fun search_dropdown_item<e::E>(item : search_menu_item, on_select : search_menu_item -> <div|e> listener) : <div|e> vnode
   div([
-    button(search_menu_item/title(item), class = "search-item-btn", click = dispatch_search(search_menu_item/query_hint(item))),
+    button(search_menu_item/title(item), class = "search-item-btn", click = on_select(item)),
     span(search_menu_item/route_hint(item), class = "search-item-hint"),
-  ], key = "search-drop-" ++ index.show, class = "search-dropdown-item")
+  ], key = "search-drop-" ++ search_menu_item/id(item), class = "search-dropdown-item")
 
-pub fun render_search_panel(demo : search_demo, dispatch_submit : listener, dispatch_search : string -> listener) : <div> vnode
+pub fun render_search_panel<e::E>(demo : search_demo, on_input : listener, on_submit : listener, on_select : search_menu_item -> <div|e> listener) : <div|e> vnode
   val items = if demo.visible_query == "" then menu_catalog() else matched_menu_items(menu_catalog(), demo.visible_query)
   val dropdown =
     if is-nil(items) then
       div(Nil, class = "search-dropdown-hidden")
     else
-      div(map-indexed(items, fn(index, item) search_dropdown_item(item, index, dispatch_search)), class = "search-dropdown")
+      div(map(items, fn(item) search_dropdown_item(item, on_select)), class = "search-dropdown")
   section([
     div([
       div([
-        input_text(demo.query_input, key = search_query_channel(), class = "input search-input", input = input_listener(search_query_channel()), enter = dispatch_submit, placeholder = "Search by keyword..."),
+        input_text(demo.query_input, key = search_query_channel(), class = "input search-input", input = on_input, enter = on_submit, placeholder = "Search by keyword..."),
       ], class = "composer-row"),
       dropdown,
     ], class = "search-input-wrap"),

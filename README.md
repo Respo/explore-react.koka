@@ -24,10 +24,11 @@ JavaScript hot replacement or be restored from `localStorage`.
 | --- | --- |
 | function component | a plain function returning `vnode` |
 | keyed child component | `components(items, group=..., key=..., render=...)` |
-| component boundary | `component_root(...)` / `component_in(...)` |
-| local reducer | `use_store(spec, initial=...)` |
-| local dispatch | `binding.send(action)` or `on_store_*` |
-| app reducer/action | `on_action_click(...)` / `on_action_enter(...)` |
+| root component | `run_component(owner, group=..., key=..., render=...)` |
+| keyed child boundary | `component_in(...)` / `components(...)` |
+| local reducer | `(state, dispatch) = use_store(spec, initial=...)` |
+| local dispatch | `dispatch(action)` or `on_store_*` |
+| app reducer/action | `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` |
 | `useEffect`-like hook | `state_effect(name=..., deps=..., action=...)` |
 | Context-like value | a Koka `val` effect |
 | browser/service capability | a Koka `fun` effect |
@@ -43,19 +44,34 @@ Element content is positional. Common attributes and events are flat labelled
 arguments, so call sites do not need an `attrs` or `children` wrapper:
 
 ```koka
+val (Incident_local_state(expanded, draft), dispatch) =
+  use_store(incident_local_store, initial = Incident_local_state(False, ""))
+
 article([
   strong(item.title, class = "incident-title"),
   button(
     if expanded then "Collapse" else "Expand",
     class = "button",
-    click = on_store_click("toggle-expanded", local, Toggle_incident)),
+    click = on_store_click(
+      "toggle-expanded",
+      action = Toggle_incident,
+      dispatch = dispatch)),
   input_text(
     draft,
     class = "input incident-input",
-    input = on_store_input("draft-input", local, Change_incident_draft),
+    input = on_store_input(
+      "draft-input",
+      action = Change_incident_draft,
+      dispatch = dispatch),
     placeholder = "Local reply draft..."),
 ], key = "incident-" ++ iid.show, class = "incident-card")
 ```
+
+Public view components follow the same props rule as elements: one primary
+domain value stays positional, while callbacks and configuration are labelled.
+For example, Search exposes `on_input = ...`, `on_submit = ...`, and
+`on_select = ...`; it does not ask callers to manufacture raw DOM payloads or
+know which listener registry path the framework assigns.
 
 For repeated children, `components(...)` owns the keyed component boundary:
 
@@ -71,6 +87,22 @@ div(
 
 This is more than a shorter `map`: the `group + key` pair determines the stable
 scope used by the child component's state, effects, and named listeners.
+
+At an app integration boundary, `run_component(...)` combines runtime handling
+with one stable root scope. Identity and the component body stay labelled so
+the boundary remains self-describing:
+
+```koka
+run_component(
+  item,
+  group = "todo",
+  key = "panel",
+  render = fn(owner) render_todo_panel(todo_panel_state_of(owner)))
+```
+
+The explicit `group + key` remains intentional. Unlike React, an ordinary Koka
+function call does not create a fiber identity that the runtime can recover
+implicitly across list reordering or hot replacement.
 
 ## Typed component stores
 
@@ -99,13 +131,12 @@ fun update_task_editor(current : task_editor_state, action : task_editor_action)
     Cancel_edit(title) -> Task_editor_state(False, title)
 ```
 
-The component-facing call stays small:
+The component-facing call mirrors React's reducer pair:
 
 ```koka
-val editor = use_store(
+val (Task_editor_state(editing, draft), dispatch) = use_store(
   task_editor_store,
   initial = Task_editor_state(False, item.title))
-val Task_editor_state(editing, draft) = editor.current
 ```
 
 Controls can emit typed store actions without manually reading or writing the
@@ -114,11 +145,17 @@ runtime tree:
 ```koka
 input_text(
   draft,
-  input = on_store_input("draft-input", editor, Change_draft))
+  input = on_store_input(
+    "draft-input",
+    action = Change_draft,
+    dispatch = dispatch))
 
 button(
   "Expand",
-  click = on_store_click("toggle-expanded", local, Toggle_incident))
+  click = on_store_click(
+    "toggle-expanded",
+    action = Toggle_incident,
+    dispatch = dispatch))
 ```
 
 The codecs are defined once beside the store. They are not passed through every
@@ -144,15 +181,16 @@ kind and a semantic name, for example:
 
 ```koka
 on_action_click("save-edit", action = Save_task, dispatch = dispatch)
+on_action_input("change-query", action = Change_search_query, dispatch = dispatch)
 on_action_enter("save-edit", action = Save_task, dispatch = dispatch)
 on_local_input("draft-input", fn(value, owner) ...)
 ```
 
 When an event only sends a typed domain action, `on_action_click(...)` and
-`on_action_enter(...)` keep the action, semantic listener name, and dispatch
-function visible without repeating `fn(owner) dispatch(action, owner)` in every
-element. `on_local_*` remains the escape hatch for handlers with custom
-branching or direct model updates.
+`on_action_input(...)` / `on_action_enter(...)` keep the action constructor,
+semantic listener name, and dispatch function visible without repeating a
+forwarding closure in every element. `on_local_*` remains the escape hatch for
+handlers with custom branching or direct model updates.
 
 At render time `run_event_registry(...)` collects typed Koka callbacks and
 returns small listener tokens to the VDOM. `render_node(...)` serializes those
@@ -164,7 +202,7 @@ conditional rendering safer without relying on listener call order.
 
 Store listeners are intentionally a narrower convenience layer:
 
-- `on_store_click(...)` emits one typed local action;
+- `on_store_click(...)` emits one typed local action through the store dispatch;
 - `on_store_input(...)` converts the input string into one typed local action;
 - `on_action_*` dispatches typed domain actions and can still expose reducer
   effects;

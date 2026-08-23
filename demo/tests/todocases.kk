@@ -14,16 +14,16 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
   val scope_name = "tests/task-editor"
   val initial = Task_editor_state(False, "Initial")
   val (_before, tree, _effects) = run_local_state(Nil, fn() component(scope_name, fn() {
-    val editor = use_store(task_editor_store, initial = initial)
-    editor.send.(Begin_edit("Draft | with separator"))
-    editor.current
+    val (current, dispatch) = use_store(task_editor_store, initial = initial)
+    dispatch(Begin_edit("Draft | with separator"))
+    current
   }))
   val current = read_store_state(tree, scope_name, task_editor_store, initial)
   val restored = read_store_state(decode_state_snapshot(encode_state_snapshot(tree)), scope_name, task_editor_store, initial)
   val (_sequential_before, sequential_tree, _sequential_effects) = run_local_state(Nil, fn() component(scope_name, fn() {
-    val editor = use_store(task_editor_store, initial = initial)
-    editor.send.(Begin_edit("Sequential draft"))
-    editor.send.(Finish_edit)
+    val (_current, dispatch) = use_store(task_editor_store, initial = initial)
+    dispatch(Begin_edit("Sequential draft"))
+    dispatch(Finish_edit)
     ()
   }))
   val sequential = read_store_state(sequential_tree, scope_name, task_editor_store, initial)

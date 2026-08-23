@@ -25,7 +25,8 @@
 
 ### Component identity
 
-- root 和 child 边界由 `component_root(...)` / `component_in(...)` 表达；
+- app 集成层用 `run_component(owner, group = ..., key = ..., render = ...)` 同时建立 runtime 与 root identity；
+- 单个 child 边界由 `component_in(...)` 表达；
 - 列表统一使用 `components(items, group = ..., key = ..., render = ...)`；
 - 业务组件不再手工拼装 listener/effect/store path；
 - state、effect 和 named listener 共享稳定的 keyed component scope。
@@ -33,19 +34,22 @@
 ### Typed component store
 
 - `store_spec<s,a>` 将 state codec、action codec 和纯 reducer 组合在一起；
-- 组件调用收敛为 `use_store(spec, initial = ...)`；
-- `on_store_click(...)` / `on_store_input(...)` 直接发 typed action；
+- 组件调用收敛为 `(state, dispatch) = use_store(spec, initial = ...)`，对齐 React `useReducer`；
+- `on_store_click(...)` / `on_store_input(...)` 使用 labelled `action + dispatch` 直接发 typed action；
+- binding record 与 `.current` / `.send` 不再暴露给业务 view；
 - 组件外协调通过 `current_store_state(...)` / `dispatch_store(...)`；
 - Todo editor 与 Lab incident local state 已完成迁移；
 - codec、slot 和 tree 编解码不再出现在普通 view 调用点。
 
 ### Typed domain-action listeners
 
-- `on_action_click(...)` / `on_action_enter(...)` 直接连接 typed action 与 feature dispatch；
+- `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` 直接连接 typed action 与 feature dispatch；
 - action、dispatch 使用 labelled arguments，在 element 调用点保持可读；
 - Todo、Lab、Route 已移除仅用于 `dispatch(action, owner)` 的一次性 closure；
+- Search 的 `on_input` / `on_submit` / `on_select` 与 Bridge 的 `on_select` callback props 已进入 typed registry，不再由 view 制造 raw listener payload；
+- Search item 与 Bridge case 使用稳定业务 id，过滤或重排不会改变同一交互的 registry identity；
 - `on_local_*` 只保留给直接 model 更新、分支逻辑或尚未 action 化的组件流程；
-- listener id 与 semantic name 不变，不影响 DOM payload 或 registry identity。
+- Todo、Lab、Route 迁移保留原 semantic name/path；Search、Bridge 则有意从 legacy raw payload 收敛到稳定 registry path。
 
 ### Runtime ownership 与恢复
 
@@ -69,15 +73,16 @@ div(children, class = ..., key = ...)
 button(text, class = ..., click = ...)
 input_text(value, input = ..., enter = ..., placeholder = ...)
 
-component_root(group, key, render)
-component_in(group, key, render)
+run_component(owner, group = ..., key = ..., render = fn(owner) ...)
+component_in(group = ..., key = ..., render = fn() ...)
 components(items, group = ..., key = ..., render = ...)
 
 use_store(spec, initial = ...)
 state_effect(name = ..., deps = ..., action = ...)
-on_store_click(name, binding, action)
-on_store_input(name, binding, to_action)
+on_store_click(name, action = ..., dispatch = ...)
+on_store_input(name, action = ..., dispatch = ...)
 on_action_click(name, action = ..., dispatch = ...)
+on_action_input(name, action = ..., dispatch = ...)
 on_action_enter(name, action = ..., dispatch = ...)
 on_local_click(name, handler)
 on_local_input(name, handler)

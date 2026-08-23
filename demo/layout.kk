@@ -60,11 +60,13 @@ fun route_stage(item : model, results : list<test_result>) : <component_runtime,
 
 pub fun render_layout(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
   val (stage_owner, current_stage, stage_effects, stage_handlers) = route_stage(item, results)
-  val (next_owner, shell_node, shell_effects, shell_handlers) = run_stateful_component(
+  val (next_owner, shell_node, shell_effects, shell_handlers) = run_component(
     stage_owner,
-    fn(owner) component_root("app", "root", fn() section([
+    group = "app",
+    key = "root",
+    render = fn(owner) section([
       intro_panel(owner),
       route_bar(owner),
       current_stage,
-    ], key = "app", class = "shell app-shell")))
+    ], key = "app", class = "shell app-shell"))
   (next_owner, shell_node, append_scheduled_effects(stage_effects, shell_effects), append_event_registries(shell_handlers, stage_handlers))

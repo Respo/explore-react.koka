@@ -115,19 +115,21 @@ pub fun reconcile_dialog_runtime(previous_owner : maybe<model>, next_owner : mod
         Nothing -> tree
   replace_component_state_entries(next_tree)
 
-pub fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
-  component_root("overlays", "dialog", fn() {
-    val current = owner.dialog
-    val close_overlay = on_local_click("close-overlay", fn(next_owner : model) apply_dialog_update(next_owner, close_dialog(next_owner.dialog, result_note = "Overlay dismissed.", notice = "Closed the overlay demo.", log_line = "[close] overlay dismissed")))
-    val primary_action = on_local_click("primary-action", fn(next_owner : model) dialog_primary_action(next_owner))
-    val submit_action = on_local_click("submit-action", fn(next_owner : model) prompt_submit(next_owner))
-    val submit_enter = on_local_enter("submit-action", fn(next_owner : model) prompt_submit(next_owner))
-    val prompt_input = on_local_input("prompt-input", fn(value, next_owner : model) next_owner(dialog = update_dialog_prompt(next_owner.dialog, value)))
-    state_effect(name = "focus-dialog", deps = [current.kind.show_kind, current.prompt_error, current.title], action = fn() {
-      if dialog_is_open(current) then dom_focus(dialog_focus_marker(current)) else ()
-    })
-    dialog/render_dialog_overlay(current, overlay_spec(current, prompt_input, submit_enter), Dialog_overlay_controls(close_overlay, primary_action, submit_action))
+fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
+  val current = owner.dialog
+  val close_overlay = on_local_click("close-overlay", fn(next_owner : model) apply_dialog_update(next_owner, close_dialog(next_owner.dialog, result_note = "Overlay dismissed.", notice = "Closed the overlay demo.", log_line = "[close] overlay dismissed")))
+  val primary_action = on_local_click("primary-action", fn(next_owner : model) dialog_primary_action(next_owner))
+  val submit_action = on_local_click("submit-action", fn(next_owner : model) prompt_submit(next_owner))
+  val submit_enter = on_local_enter("submit-action", fn(next_owner : model) prompt_submit(next_owner))
+  val prompt_input = on_local_input("prompt-input", fn(value, next_owner : model) next_owner(dialog = update_dialog_prompt(next_owner.dialog, value)))
+  state_effect(name = "focus-dialog", deps = [current.kind.show_kind, current.prompt_error, current.title], action = fn() {
+    if dialog_is_open(current) then dom_focus(dialog_focus_marker(current)) else ()
   })
+  dialog/render_dialog_overlay(current, spec = overlay_spec(current, prompt_input, submit_enter), controls = Dialog_overlay_controls(close_overlay, primary_action, submit_action))
 
 pub fun run_dialog_overlay(owner : model) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_stateful_component(owner, fn(current_owner) render_dialog_overlay(current_owner))
+  run_component(
+    owner,
+    group = "overlays",
+    key = "dialog",
+    render = fn(current_owner) render_dialog_overlay(current_owner))

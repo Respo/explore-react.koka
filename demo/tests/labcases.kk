@@ -2,13 +2,16 @@ module demo/tests/labcases
 
 import library/bridge
 import library/route
+import library/search
 import demo/model
 import demo/runtimeframe
 import demo/seed
 import demo/lab/state
 import demo/lab/workflow
 import demo/labpanel
+import demo/tests/appharness
 import demo/tests/support
+import explore/react/core
 import explore/react/state
 
 pub fun lab_local_routing_test() : <div> test_result
@@ -28,6 +31,44 @@ pub fun lab_local_routing_test() : <div> test_result
   })
   val toggled_runtime_tree = toggled.runtime_tree
   Test_result("Workflow lab local routing", "draft=" ++ inspect_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ inspect_incident_expanded(toggled_runtime_tree, 101).show, inspect_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && inspect_incident_expanded(toggled_runtime_tree, 101))
+
+pub fun component_action_props_test() : <div> test_result
+  val search_harness = app_harness(initial_model()(route_name = normalize_route("lab-search")))
+  val search_payload = button_payload_by_text(search_harness.tree, "Dialog overlay drawer")
+  val search_input_channel = match find_registered_input_by_semantic(search_harness.registry, "search-query")
+    Just(found) -> registered_input/id(found)
+    Nothing -> ""
+  val search_registered = match find_registered_click(search_harness.registry, search_payload)
+    Just(found) -> registered_click/semantic_name(found) == "search-dialog-drawer"
+    Nothing -> False
+  val (input_search_harness, input_requests, _input_audits) = capture_bridge(fn() app_harness_input_channel(search_harness, search_input_channel, "dialog"))
+  val input_search_owner : model = input_search_harness.owner
+  val input_search_lab : workflow_lab = input_search_owner.lab
+  val input_search_demo = input_search_lab.search_demo
+  val filtered_search_harness = app_harness(input_search_owner(
+    lab = input_search_lab(search_demo = input_search_demo(visible_query = "dialog"))))
+  val filtered_search_payload = button_payload_by_text(filtered_search_harness.tree, "Dialog overlay drawer")
+  val (search_owner, search_requests, _search_audits) = capture_bridge(fn() app_harness_click_payload(search_harness, search_payload).owner)
+
+  val bridge_harness = app_harness(initial_model()(route_name = normalize_route("lab-bridge")))
+  val bridge_payload = button_payload_by_text(bridge_harness.tree, "Replay Queue Drain")
+  val bridge_registered = match find_registered_click(bridge_harness.registry, bridge_payload)
+    Just(found) -> registered_click/semantic_name(found) == "bridge-queue-drain"
+    Nothing -> False
+  val (bridge_owner, bridge_requests, _bridge_audits) = capture_bridge(fn() app_harness_click_payload(bridge_harness, bridge_payload).owner)
+
+  val search_started = search_owner.lab.search_demo.requested_query == "dialog" && length(search_requests) == 2
+  val input_controlled =
+    search_input_channel == component_listener_path("lab", "panel", Input_event, "search-query") &&
+    input_search_harness.owner.lab.search_demo.query_input == "dialog" &&
+    length(input_requests) == 1
+  val search_identity_stable = search_payload == filtered_search_payload
+  val bridge_started = bridge_owner.lab.bridge_demo.requested_case == "queue-drain" && length(bridge_requests) == 1
+  val registries_clean = is-empty(search_harness.registry.warnings) && is-empty(input_search_harness.registry.warnings) && is-empty(filtered_search_harness.registry.warnings) && is-empty(bridge_harness.registry.warnings)
+  Test_result(
+    "Component callback props register typed actions",
+    "search=" ++ search_registered.show ++ "/" ++ search_requests.length.show ++ ", input=" ++ input_controlled.show ++ "/" ++ input_requests.length.show ++ ", stable=" ++ search_identity_stable.show ++ ", bridge=" ++ bridge_registered.show ++ "/" ++ bridge_requests.length.show ++ ", clean=" ++ registries_clean.show,
+    search_registered && input_controlled && search_identity_stable && bridge_registered && search_started && bridge_started && registries_clean)
 
 pub fun workflow_sync_test() : <div> test_result
   val (next, waits, audits) = capture_workflow(fn() perform_sync(initial_model()(route_name = normalize_route("lab"))))

@@ -99,7 +99,7 @@ pub fun capture_audits(action : () -> <browser_host|e> model) : e (model, list<s
     fun now_label() "T+0"
   action()
 
-pub fun capture_bridge(action : () -> <browser_host,request_bridge_resource|e> model) : e (model, list<string>, list<string>)
+pub fun capture_bridge<a,e>(action : () -> <browser_host,request_bridge_resource|e> a) : e (a, list<string>, list<string>)
   var requests := Nil
   var audits := Nil
   with return(result) (result, requests, audits)
@@ -284,7 +284,7 @@ pub fun harness_fire_named_input(
   semantic_name : string,
   value : string,
   render_fn : (runtime_frame) -> <div> component_harness
-) : <div> component_harness
+) : <bridge_demo_effect,div> component_harness
   match find_registered_input_by_semantic(h.registry, semantic_name)
     Nothing -> h
     Just(found) -> {
@@ -297,7 +297,7 @@ pub fun harness_fire_input_channel(
   channel : string,
   value : string,
   render_fn : (runtime_frame) -> <div> component_harness
-) : <div> component_harness
+) : <bridge_demo_effect,div> component_harness
   match find_registered_input(h.registry, channel)
     Nothing -> h
     Just(found) -> {

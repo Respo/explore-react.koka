@@ -140,26 +140,30 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 
 组件交互状态以 **typed store + serializable actions** 为默认方案。它保留 React reducer 的简单心智模型，同时满足 Koka 严格类型、HMR 和 snapshot 恢复需求。
 
-- 业务组件用 `use_store(spec, initial = ...)` 读取一个 typed binding，状态从 `binding.current` 解构。
-- UI 事件优先用 `on_store_click(...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
-- domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_enter(...)`，不要在每个 element 内重复 `fn(owner) dispatch(action, owner)`。
+- 业务组件用 `(state, dispatch) = use_store(spec, initial = ...)` 读取 reducer pair，不额外暴露 binding record。
+- UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
+- domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
 - 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
 - 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
 - scope/path/slot/tree 属于 framework/runtime 细节。列表组件用 `components(items, group = ..., key = ..., render = ...)` 建立稳定 identity。
+- app 集成层用 `run_component(owner, group = ..., key = ..., render = fn(owner) ...)`，不要重复嵌套 `run_stateful_component + component_root + fn()`。
+- 高层 view component 保持一个主要 domain value 位置参数，其余 callback/config props 使用 labelled arguments，例如 `on_input = ...`、`on_submit = ...`、`on_select = ...`。
 - 组件外协调状态时用 `current_store_state(...)` / `dispatch_store(...)` 这类 typed API；不要在业务模块复制 tree 编解码。
 - action 必须可序列化，方便事件日志、恢复、回放，以及后续 agents/actions/store 工具链。
 
 推荐形态：
 
 ```koka
-val editor = use_store(
+val (Task_editor_state(editing, draft), dispatch_editor) = use_store(
   task_editor_store,
   initial = Task_editor_state(False, item.title))
-val Task_editor_state(editing, draft) = editor.current
 
 input_text(
   draft,
-  input = on_store_input("draft-input", editor, Change_draft))
+  input = on_store_input(
+    "draft-input",
+    action = Change_draft,
+    dispatch = dispatch_editor))
 
 button(
   "Save",

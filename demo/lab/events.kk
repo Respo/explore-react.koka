@@ -7,31 +7,16 @@ import demo/lab/workflow
 import library/bridge
 import library/maybe
 import library/search
-import explore/react/core
 import explore/react/state
 
 pub type lab_action
   Load_board
   Run_sync
   Load_bridge_case(case_name : string)
+  Change_search_query(value : string)
   Submit_search
   Search_for(query : string)
   Send_reply(incident_id : int)
-
-pub fun lab_action_payload(action : lab_action) : string
-  match action
-    Load_board -> "lab-load"
-    Run_sync -> "lab-sync"
-    Load_bridge_case(case_name) -> bridge_load_payload(case_name)
-    Submit_search -> search_submit_payload()
-    Search_for(query) -> search_pick_payload(query)
-    Send_reply(incident_id) -> "lab-send-" ++ incident_id.show
-
-pub fun dispatch_lab_click(action : lab_action) : listener
-  click_listener(lab_action_payload(action))
-
-pub fun dispatch_lab_enter(action : lab_action) : listener
-  enter_listener(lab_action_payload(action))
 
 fun find_lab_draft_channel(channel : string, items : list<incident>) : <div> maybe<int>
   find(items, fn(item) channel == "lab-draft-" ++ incident/id(item).show).map(incident/id)
@@ -47,6 +32,7 @@ pub fun dispatch_lab_action(action : lab_action, owner : model) : <lab_action_ef
     Load_board -> load_snapshot(owner)
     Run_sync -> perform_sync(owner)
     Load_bridge_case(case_name) -> start_bridge_case(owner, case_name)
+    Change_search_query(value) -> set_search_query(owner, value)
     Submit_search -> start_search(owner)
     Search_for(query) -> pick_search_case(owner, query)
     Send_reply(incident_id) -> send_reply(owner, incident_id)

@@ -32,6 +32,7 @@ pub fun demo_test_results() : <div> list<test_result>
     harness_multi_step_test(),
     app_runtime_preserves_child_store_test(),
     lab_local_routing_test(),
+    component_action_props_test(),
     add_task_focus_test(),
     start_edit_focus_test(),
     todo_edit_local_state_test(),
