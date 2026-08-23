@@ -3,8 +3,7 @@ module demo/tests/labcases
 import library/bridge
 import library/route
 import demo/model
-import demo/runtimeowner
-import demo/runtimebridge
+import demo/runtimeframe
 import demo/seed
 import demo/lab/state
 import demo/lab/workflow
@@ -16,14 +15,17 @@ pub fun lab_local_routing_test() : <div> test_result
   with with_test_browser(False, "T+120")
   val base = initial_model()(route_name = normalize_route("lab"))
   val (_base_owner, base_runtime_tree, _tree, _effects, _registry) = run_lab_panel(base, Nil)
-  val drafted_with_tree = match handle_lab_input("lab-draft-101", "Shift traffic to backup POP.", runtimeowner/attach_runtime_tree(base, base_runtime_tree))
-    Just(result) -> result
-    Nothing -> runtimeowner/attach_runtime_tree(base, base_runtime_tree)
-  val (drafted, drafted_runtime_tree) = runtimeowner/detach_runtime_tree(drafted_with_tree)
-  val toggled_with_tree = match handle_lab_click("lab-toggle-101", runtimeowner/attach_runtime_tree(drafted, drafted_runtime_tree))
-    Just(result) -> result
-    Nothing -> runtimeowner/attach_runtime_tree(drafted, drafted_runtime_tree)
-  val (_toggled, toggled_runtime_tree) = runtimeowner/detach_runtime_tree(toggled_with_tree)
+  val drafted = run_runtime_action(current_runtime_frame(base, base_runtime_tree), fn(owner) {
+    match handle_lab_input("lab-draft-101", "Shift traffic to backup POP.", owner)
+      Just(result) -> result
+      Nothing -> owner
+  })
+  val toggled = run_runtime_action(drafted, fn(owner) {
+    match handle_lab_click("lab-toggle-101", owner)
+      Just(result) -> result
+      Nothing -> owner
+  })
+  val toggled_runtime_tree = toggled.runtime_tree
   Test_result("Workflow lab local routing", "draft=" ++ lab_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ lab_incident_expanded(toggled_runtime_tree, 101).show, lab_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && lab_incident_expanded(toggled_runtime_tree, 101))
 
 pub fun workflow_sync_test() : <div> test_result
@@ -37,9 +39,11 @@ pub fun workflow_sync_test() : <div> test_result
 
 pub fun workflow_reply_test() : <div> test_result
   val base = initial_model()(route_name = normalize_route("lab"))
-  val prepared_with_tree = commit_lab_tree(runtimeowner/attach_runtime_tree(base, Nil), fn() set_local_lab_draft(base, 102, "Shift replay traffic onto the cache-safe queue."))
-  val (next_with_tree, waits, _audits) = capture_workflow(fn() send_reply(prepared_with_tree, 102))
-  val (next, next_runtime_tree) = runtimeowner/detach_runtime_tree(next_with_tree)
+  val (prepared, prepared_runtime_tree) = run_local_action(Nil, fn() {
+    dispatch_incident_local_action(102, Change_incident_draft("Shift replay traffic onto the cache-safe queue."))
+    base
+  })
+  val ((next, next_runtime_tree), waits, _audits) = capture_workflow(fn() run_local_action(prepared_runtime_tree, fn() send_reply(prepared, 102)))
   val total = sum(waits)
   val lab = next.lab
   val cleared = lab_incident_draft(next_runtime_tree, 102) == ""

@@ -24,7 +24,7 @@ pub fun dialog_alert_open_test() : <div> test_result
   Test_result(
     "Dialog alert opens overlay",
     "kind=" ++ current.kind.show_kind ++ ", title=" ++ current.title ++ ", local=" ++ in_registry.show,
-    (match current.kind { Dialog_alert -> True; _ -> False }) && current.title == "Alert demo" && in_registry && alert_payload == effects_dialog_demo_listener_path(Click_event, "open-alert"))
+    (match current.kind { Dialog_alert -> True; _ -> False }) && current.title == "Alert demo" && in_registry && alert_payload == named_local_listener_path(component_child_path(component_local_path("effects", "panel"), "dialogs", "demo"), Click_event, "open-alert"))
 
 pub fun dialog_prompt_validation_test() : <div> test_result
   with with_test_browser(False, "T+0")

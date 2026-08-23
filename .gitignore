@@ -2,6 +2,7 @@ node_modules/
 .yarn/install-state.gz
 dist/
 .koka-build/
+.koka-generated-next/
 .tmp-koka-check/
 src/generated/
 
@@ -14,3 +15,4 @@ src/generated/
 blog/*
 test_output.txt
 test_results.txt
+.DS_Store

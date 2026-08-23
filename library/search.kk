@@ -181,29 +181,26 @@ pub fun search_menu_matches_query(item : search_menu_item, query : string) : <di
   item_prefix_matches(item, query)
 
 fun search_dropdown_item(item : search_menu_item, index : int, dispatch_search : string -> listener) : <div> vnode
-  div_key("search-drop-" ++ index.show, props(class = "search-dropdown-item"), [
-    button(props(class = "search-item-btn"), on(click = dispatch_search(search_menu_item/query_hint(item))), search_menu_item/title(item)),
-    span(props(class = "search-item-hint"), search_menu_item/route_hint(item)),
-  ])
-
-fun render_search_dropdown(items : list<search_menu_item>, dispatch_search : string -> listener) : <div> list<vnode>
-  map-indexed(items, fn(index, item) search_dropdown_item(item, index, dispatch_search))
+  div([
+    button(search_menu_item/title(item), class = "search-item-btn", click = dispatch_search(search_menu_item/query_hint(item))),
+    span(search_menu_item/route_hint(item), class = "search-item-hint"),
+  ], key = "search-drop-" ++ index.show, class = "search-dropdown-item")
 
 pub fun render_search_panel(demo : search_demo, dispatch_submit : listener, dispatch_search : string -> listener) : <div> vnode
   val items = if demo.visible_query == "" then menu_catalog() else matched_menu_items(menu_catalog(), demo.visible_query)
   val dropdown =
     if is-nil(items) then
-      div(props(class = "search-dropdown-hidden"), Nil)
+      div(Nil, class = "search-dropdown-hidden")
     else
-      div(props(class = "search-dropdown"), render_search_dropdown(items, dispatch_search))
-  section_key("lab-search", props(class = "search-panel"), [
-    div(props(class = "search-input-wrap"), [
-      div(props(class = "composer-row"), [
-        input_text_key(search_query_channel(), props(class = "input search-input"), on(input = input_listener(search_query_channel()), enter = dispatch_submit), demo.query_input, "Search by keyword..."),
-      ]),
+      div(map-indexed(items, fn(index, item) search_dropdown_item(item, index, dispatch_search)), class = "search-dropdown")
+  section([
+    div([
+      div([
+        input_text(demo.query_input, key = search_query_channel(), class = "input search-input", input = input_listener(search_query_channel()), enter = dispatch_submit, placeholder = "Search by keyword..."),
+      ], class = "composer-row"),
       dropdown,
-    ]),
-  ])
+    ], class = "search-input-wrap"),
+  ], key = "lab-search", class = "search-panel")
 
 pub fun should_arm_auto_search(demo : search_demo, trimmed : string) : bool
   if trimmed == "" then
@@ -295,4 +292,3 @@ pub fun apply_search_result(demo : search_demo, query : string, results : list<s
     auto_status = "idle",
     results = results,
     stage_note = if recovered then recovered_note else resolved_note), recovered)
-

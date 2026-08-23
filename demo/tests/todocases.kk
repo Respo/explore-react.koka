@@ -10,6 +10,40 @@ import explore/react/core
 import explore/react/renderer
 import explore/react/state
 
+pub fun todo_editor_store_protocol_test() : <div> test_result
+  val scope_name = "tests/task-editor"
+  val initial = Task_editor_state(False, "Initial")
+  val (_before, tree, _effects) = run_local_state(Nil, fn() component(scope_name, fn() {
+    val editor = use_store(task_editor_store, initial = initial)
+    editor.send.(Begin_edit("Draft | with separator"))
+    editor.current
+  }))
+  val current = read_store_state(tree, scope_name, task_editor_store, initial)
+  val restored = read_store_state(decode_state_snapshot(encode_state_snapshot(tree)), scope_name, task_editor_store, initial)
+  val (_sequential_before, sequential_tree, _sequential_effects) = run_local_state(Nil, fn() component(scope_name, fn() {
+    val editor = use_store(task_editor_store, initial = initial)
+    editor.send.(Begin_edit("Sequential draft"))
+    editor.send.(Finish_edit)
+    ()
+  }))
+  val sequential = read_store_state(sequential_tree, scope_name, task_editor_store, initial)
+  val message = encode_store_action(scope_name, task_editor_store, Change_draft("Next | draft"))
+  val action_roundtrip = match decode_store_action(task_editor_store, message)
+    Just(Change_draft(value)) -> value == "Next | draft"
+    _ -> False
+  val version_guard = match decode_store_action(task_editor_store, message(version = 9))
+    Nothing -> True
+    _ -> False
+  val versioned_cell = any(tree, fn(entry) {
+    entry.path == named_local_state_path(scope_name, "editor") &&
+    entry.schema == "todo/task-editor" &&
+    entry.version == 1
+  })
+  Test_result(
+    "Todo editor uses typed store protocol",
+    "editing=" ++ current.editing.show ++ ", draft=" ++ current.draft ++ ", action=" ++ message.schema ++ "@" ++ message.version.show,
+    current.editing && current.draft == "Draft | with separator" && restored.draft == current.draft && not(sequential.editing) && sequential.draft == "Sequential draft" && is-empty(decode_state_snapshot("bad%|schema|1|payload")) && action_roundtrip && version_guard && versioned_cell)
+
 pub fun todo_edit_local_state_test() : <div> test_result
   with with_test_browser(False, "T+0")
   val base_harness = todo_harness(initial_model())
@@ -55,8 +89,9 @@ pub fun add_task_focus_test() : <div> test_result
   val rendered = next_harness.owner
   val panel_node = next_harness.tree
   val effects = next_harness.effects
-  val focused_draft = any(effects, fn(item) scheduled_effect/path(item) == todo_panel_effect_path(0))
-  val pulsed_notice = any(effects, fn(item) scheduled_effect/path(item) == todo_panel_effect_path(1))
+  val todo_scope = component_local_path("todo", "panel")
+  val focused_draft = any(effects, fn(item) scheduled_effect/path(item) == named_local_effect_path(todo_scope, "focus-draft"))
+  val pulsed_notice = any(effects, fn(item) scheduled_effect/path(item) == named_local_effect_path(todo_scope, "pulse-notice"))
   val has_focus_marker = vnode_has_attr_value(panel_node, "data-k-effect", "draft")
   Test_result(
     "Add task schedules focus",
@@ -71,7 +106,7 @@ pub fun start_edit_focus_test() : <div> test_result
   val panel_node = started_harness.tree
   val effects = started_harness.effects
   val expected = match find(rendered.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> task_effect_path(item, 0)
+    Just(item) -> named_local_effect_path(component_child_path(component_local_path("todo", "panel"), "tasks", task/id(item).show), "focus-editor")
     Nothing -> "missing"
   val expected_marker = match find(rendered.tasks, fn(item) 2 == task/id(item))
     Just(item) -> "task-draft-" ++ task/id(item).show

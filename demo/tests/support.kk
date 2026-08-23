@@ -4,7 +4,7 @@ import demo/dialogs
 import demo/lab/state
 import demo/labpanel
 import demo/model
-import demo/runtimebridge
+import demo/runtimeframe
 import demo/seed
 import demo/todo/state
 import demo/todopanel
@@ -63,7 +63,7 @@ pub fun capture_waits(action : () -> <browser_host|e> string) : e (string, list<
     fun wait_ms(delay) waits := Cons(delay, waits)
   action()
 
-pub fun capture_workflow(action : () -> <browser_host|e> model) : e (model, list<int>, list<string>)
+pub fun capture_workflow<a,e>(action : () -> <browser_host|e> a) : e (a, list<int>, list<string>)
   var waits := Nil
   var audits := Nil
   with return(result) (result, waits, audits)
@@ -109,9 +109,12 @@ pub fun bridge_base_model() : model
   initial_model()(route_name = normalize_route("lab"))
 
 pub fun bridge_click(owner : model, payload : string) : <browser_host,request_bridge_resource,div> model
-  match handle_lab_click(payload, owner)
-    Just(result) -> result
-    Nothing -> owner
+  val (next, _runtime_tree) = run_local_action(Nil, fn() {
+    match handle_lab_click(payload, owner)
+      Just(result) -> result
+      Nothing -> owner
+  })
+  next
 
 pub fun capture_bridge_click(owner : model, payload : string) : <div> (model, list<string>, list<string>)
   capture_bridge(fn() bridge_click(owner, payload))
@@ -136,9 +139,12 @@ pub fun search_base_model() : model
 
 pub fun capture_search_input(owner : model, value : string) : <div> (model, list<string>, list<string>)
   capture_bridge(fn() {
-    match handle_lab_input(search_query_channel(), value, owner)
-      Just(result) -> result
-      Nothing -> owner
+    val (next, _runtime_tree) = run_local_action(Nil, fn() {
+      match handle_lab_input(search_query_channel(), value, owner)
+        Just(result) -> result
+        Nothing -> owner
+    })
+    next
   })
 
 pub fun search_input(owner : model, value : string) : <div> model
@@ -246,18 +252,21 @@ pub fun todo_harness_render(owner : model, runtime_tree : list<state_entry>) : <
 pub fun todo_harness(owner : model) : <div> component_harness
   todo_harness_render(owner, Nil)
 
+fun run_harness_action<e>(h : component_harness, action : (model) -> <local_state_read,local_state_write,div|e> model) : <div|e> runtime_frame
+  run_runtime_action(current_runtime_frame(h.owner, h.runtime_tree), action)
+
 // Fire a locally-registered click by semantic name; re-render via render_fn.
 // The caller must have browser_event_effect in scope (same as capture_bridge tests).
 pub fun harness_fire_named_click(
   h : component_harness,
   semantic_name : string,
   render_fn : (model, list<state_entry>) -> <div> component_harness
-) : <browser_event_effect,div> component_harness
+) : <bridge_demo_effect,div> component_harness
   match find_registered_click_by_semantic(h.registry, semantic_name)
     Nothing -> h
     Just(found) -> {
-      val (next_owner, next_runtime_tree) = runtimebridge/run_with_runtime_tree(registered_click/id(found), h.owner, h.runtime_tree, fn(current_owner) run_registered_click(found, current_owner))
-      render_fn(next_owner, next_runtime_tree)
+      val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
+      render_fn(next.owner, next.runtime_tree)
     }
 
 // Fire a locally-registered input by semantic name; re-render via render_fn.
@@ -270,8 +279,8 @@ pub fun harness_fire_named_input(
   match find_registered_input_by_semantic(h.registry, semantic_name)
     Nothing -> h
     Just(found) -> {
-      val (next_owner, next_runtime_tree) = runtimebridge/run_with_runtime_tree(registered_input/id(found), h.owner, h.runtime_tree, fn(current_owner) run_registered_input(found, value, current_owner))
-      render_fn(next_owner, next_runtime_tree)
+      val next = run_harness_action(h, fn(current_owner) run_registered_input(found, value, current_owner))
+      render_fn(next.owner, next.runtime_tree)
     }
 
 pub fun harness_fire_input_channel(
@@ -283,8 +292,8 @@ pub fun harness_fire_input_channel(
   match find_registered_input(h.registry, channel)
     Nothing -> h
     Just(found) -> {
-      val (next_owner, next_runtime_tree) = runtimebridge/run_with_runtime_tree(channel, h.owner, h.runtime_tree, fn(current_owner) run_registered_input(found, value, current_owner))
-      render_fn(next_owner, next_runtime_tree)
+      val next = run_harness_action(h, fn(current_owner) run_registered_input(found, value, current_owner))
+      render_fn(next.owner, next.runtime_tree)
     }
 
 // Fire a click using the exact payload string (the value in data-k-click).
@@ -293,11 +302,11 @@ pub fun harness_fire_click_payload(
   h : component_harness,
   payload : string,
   render_fn : (model, list<state_entry>) -> <div> component_harness
-) : <browser_event_effect,div> component_harness
+) : <bridge_demo_effect,div> component_harness
   match find_registered_click(h.registry, payload)
     Just(found) -> {
-      val (next_owner, next_runtime_tree) = runtimebridge/run_with_runtime_tree(payload, h.owner, h.runtime_tree, fn(current_owner) run_registered_click(found, current_owner))
-      render_fn(next_owner, next_runtime_tree)
+      val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
+      render_fn(next.owner, next.runtime_tree)
     }
     Nothing -> h
 
@@ -305,10 +314,10 @@ pub fun harness_fire_click_payload(
 pub fun todo_harness_click_payload(
   h : component_harness,
   payload : string
-) : <browser_event_effect,div> component_harness
+) : <bridge_demo_effect,div> component_harness
   match find_registered_click(h.registry, payload)
     Just(found) -> {
-      val (next_owner, next_runtime_tree) = runtimebridge/run_with_runtime_tree(payload, h.owner, h.runtime_tree, fn(current_owner) run_registered_click(found, current_owner))
-      todo_harness_render(next_owner, next_runtime_tree)
+      val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
+      todo_harness_render(next.owner, next.runtime_tree)
     }
     Nothing -> h

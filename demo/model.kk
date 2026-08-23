@@ -47,7 +47,7 @@ pub alias snapshot_host_effect = <browser_host>
 pub alias sync_host_effect = <browser_host>
 pub alias reply_host_effect = <browser_host>
 pub alias lab_action_effect = <browser_host,request_bridge_resource>
-pub alias browser_event_effect = <browser_host,request_bridge_resource>
+pub alias browser_event_effect = <browser_host,request_bridge_resource,local_state_read,local_state_write>
 
 pub struct task
   id : int
@@ -82,7 +82,6 @@ pub struct model
   filter_name : string
   notice : string
   route_name : string
-  app_local_tree : list<state_entry>
   lab : workflow_lab
   dialog : dialog_demo
 
