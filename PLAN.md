@@ -39,6 +39,14 @@
 - Todo editor 与 Lab incident local state 已完成迁移；
 - codec、slot 和 tree 编解码不再出现在普通 view 调用点。
 
+### Typed domain-action listeners
+
+- `on_action_click(...)` / `on_action_enter(...)` 直接连接 typed action 与 feature dispatch；
+- action、dispatch 使用 labelled arguments，在 element 调用点保持可读；
+- Todo、Lab、Route 已移除仅用于 `dispatch(action, owner)` 的一次性 closure；
+- `on_local_*` 只保留给直接 model 更新、分支逻辑或尚未 action 化的组件流程；
+- listener id 与 semantic name 不变，不影响 DOM payload 或 registry identity。
+
 ### Runtime ownership 与恢复
 
 - component state tree 已从业务 `model` 移出；
@@ -69,6 +77,8 @@ use_store(spec, initial = ...)
 state_effect(name = ..., deps = ..., action = ...)
 on_store_click(name, binding, action)
 on_store_input(name, binding, to_action)
+on_action_click(name, action = ..., dispatch = ...)
+on_action_enter(name, action = ..., dispatch = ...)
 on_local_click(name, handler)
 on_local_input(name, handler)
 on_local_enter(name, handler)
@@ -112,6 +122,7 @@ clear_store_state(scope, spec)
 ### 3. 进一步精简 feature 辅助函数
 
 - 删除只转发 struct accessor 或只包装一次 framework API 的 helper；
+- typed action listener 已收敛 domain dispatch closure，后续只在出现第三种重复事件形态时扩 API；
 - scope 计算只保留在确有跨组件协调的 state 模块；
 - reducer、codec、store spec 尽量同模块定义，view 只 import typed surface；
 - 如果相同 codec 样板在第三处出现，再提炼 framework combinator，避免为两个案例过早抽象。

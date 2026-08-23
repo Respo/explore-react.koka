@@ -24,7 +24,7 @@ fun task_item_view(item : task) : todo_view_effect vnode
   })
   val detail = if editing then
       div([
-        input_text(draft, key = "task-draft-" ++ tid.show, class = "input", data_effect = "task-draft-" ++ tid.show, input = on_store_input("draft-input", editor, Change_draft), enter = on_local_enter("save-edit", fn(owner) dispatch(Save_task, owner)), placeholder = "Edit title locally before saving..."),
+        input_text(draft, key = "task-draft-" ++ tid.show, class = "input", data_effect = "task-draft-" ++ tid.show, input = on_store_input("draft-input", editor, Change_draft), enter = on_action_enter("save-edit", action = Save_task, dispatch = dispatch), placeholder = "Edit title locally before saving..."),
       ], class = "task-main")
     else
       div([
@@ -33,14 +33,14 @@ fun task_item_view(item : task) : todo_view_effect vnode
       ], class = "task-main")
   val actions = if editing then
       [
-        button("Save", class = "button button-primary", click = on_local_click("save-edit", fn(owner) dispatch(Save_task, owner))),
-        button("Cancel", class = "button", click = on_local_click("cancel-edit", fn(owner) dispatch(Cancel_task, owner))),
+        button("Save", class = "button button-primary", click = on_action_click("save-edit", action = Save_task, dispatch = dispatch)),
+        button("Cancel", class = "button", click = on_action_click("cancel-edit", action = Cancel_task, dispatch = dispatch)),
       ]
     else
       [
-        button("Edit", class = "button", click = on_local_click("start-edit", fn(owner) dispatch(Edit_task, owner))),
-        button(if item.done then "Undo" else "Done", class = "button", click = on_local_click("toggle-task", fn(owner) dispatch(Toggle_task, owner))),
-        button("Remove", class = "button button-danger", click = on_local_click("remove-task", fn(owner) dispatch(Remove_task, owner))),
+        button("Edit", class = "button", click = on_action_click("start-edit", action = Edit_task, dispatch = dispatch)),
+        button(if item.done then "Undo" else "Done", class = "button", click = on_action_click("toggle-task", action = Toggle_task, dispatch = dispatch)),
+        button("Remove", class = "button button-danger", click = on_action_click("remove-task", action = Remove_task, dispatch = dispatch)),
       ]
   li([
     detail,
@@ -49,7 +49,7 @@ fun task_item_view(item : task) : todo_view_effect vnode
 
 fun filter_button(label : string, value : string, active : bool) : <hook_scope,listener_registry<model,browser_event_effect>,div> vnode
   val class_name = if active then "button button-active" else "button"
-  button(label, class = class_name, click = on_local_click("set-filter-" ++ value, fn(m : model) dispatch_todo_action(Set_filter(value), m)))
+  button(label, class = class_name, click = on_action_click("set-filter-" ++ value, action = Set_filter(value), dispatch = dispatch_todo_action))
 
 pub fun render_todo_panel(panel_state : todo_panel_state) : todo_view_effect vnode
   val visible = visible_panel_tasks(panel_state)
@@ -68,9 +68,9 @@ pub fun render_todo_panel(panel_state : todo_panel_state) : todo_view_effect vno
       summary_chip("Filter", panel_state.filter_name),
     ], class = "summary-row"),
     div([
-      input_text(panel_state.draft, class = "input", data_effect = "draft", input = on_local_input("draft-input", fn(value, next_owner : model) next_owner(draft = value)), enter = on_local_enter("add-task", fn(m : model) dispatch_todo_action(Add_task, m)), placeholder = "Add a task or effect experiment..."),
-      button("Add", class = "button button-primary", click = on_local_click("add-task", fn(m : model) dispatch_todo_action(Add_task, m))),
-      button("Clear done", class = "button", click = on_local_click("clear-completed", fn(m : model) dispatch_todo_action(Clear_completed, m))),
+      input_text(panel_state.draft, class = "input", data_effect = "draft", input = on_local_input("draft-input", fn(value, next_owner : model) next_owner(draft = value)), enter = on_action_enter("add-task", action = Add_task, dispatch = dispatch_todo_action), placeholder = "Add a task or effect experiment..."),
+      button("Add", class = "button button-primary", click = on_action_click("add-task", action = Add_task, dispatch = dispatch_todo_action)),
+      button("Clear done", class = "button", click = on_action_click("clear-completed", action = Clear_completed, dispatch = dispatch_todo_action)),
     ], class = "composer-row"),
     div([
       filter_button("All", "all", panel_state.filter_name == "all"),

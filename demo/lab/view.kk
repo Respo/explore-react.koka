@@ -52,8 +52,8 @@ fun incident_card(item : incident) : lab_view_effect vnode
     ], class = "incident-head"),
     div([
       button(toggle_label, class = "button", click = on_store_click("toggle-expanded", local, Toggle_incident)),
-      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", local, Change_incident_draft), enter = on_local_enter("send-reply", fn(owner : model) dispatch_lab_action(Send_reply(iid), owner)), placeholder = "Local reply draft, per card..."),
-      button("Send reply", class = "button button-primary", click = on_local_click("send-reply", fn(m : model) dispatch_lab_action(Send_reply(iid), m))),
+      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", local, Change_incident_draft), enter = on_action_enter("send-reply", action = Send_reply(iid), dispatch = dispatch_lab_action), placeholder = "Local reply draft, per card..."),
+      button("Send reply", class = "button button-primary", click = on_action_click("send-reply", action = Send_reply(iid), dispatch = dispatch_lab_action)),
     ], class = "incident-controls"),
     detail_node,
   ], key = "incident-" ++ iid.show, class = "incident-card")
@@ -75,7 +75,7 @@ fun lab_panel_note(route_name : string) : string
 
 fun lab_panel_sections(route_name : string, lab : workflow_lab) : lab_view_effect list<vnode>
   if route_name == "lab-search" then {
-    val submit_listener = on_local_enter("submit-search", fn(m : model) dispatch_lab_action(Submit_search, m))
+    val submit_listener = on_action_enter("submit-search", action = Submit_search, dispatch = dispatch_lab_action)
     [render_search_panel(lab.search_demo, submit_listener, fn(query) dispatch_lab_click(Search_for(query)))]
   }
   else if route_name == "lab-bridge" then
@@ -83,8 +83,8 @@ fun lab_panel_sections(route_name : string, lab : workflow_lab) : lab_view_effec
   else
     [
       div([
-        button("Load mock board", class = "button", click = on_local_click("load-board", fn(m : model) dispatch_lab_action(Load_board, m))),
-        button("Run staged sync", class = "button button-primary", click = on_local_click("run-sync", fn(m : model) dispatch_lab_action(Run_sync, m))),
+        button("Load mock board", class = "button", click = on_action_click("load-board", action = Load_board, dispatch = dispatch_lab_action)),
+        button("Run staged sync", class = "button button-primary", click = on_action_click("run-sync", action = Run_sync, dispatch = dispatch_lab_action)),
         span("status: " ++ lab.sync_status, class = "mono"),
       ], class = "button-row"),
       div([

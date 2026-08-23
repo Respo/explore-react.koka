@@ -432,6 +432,14 @@ pub fun on_local_input<s,e::E>(name : string, action : (string, s) -> <local_sta
 pub fun on_local_enter<s,e::E>(name : string, action : (s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Enter_event, name), Enter_registration(name, action))
 
+// Domain actions should stay visible at component call sites without repeating
+// the closure that only forwards an action and the current owner to a reducer.
+pub fun on_action_click<s,a,e::E>(name : string, action : a, dispatch : (a, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
+  on_local_click(name, fn(owner) dispatch(action, owner))
+
+pub fun on_action_enter<s,a,e::E>(name : string, action : a, dispatch : (a, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
+  on_local_enter(name, fn(owner) dispatch(action, owner))
+
 // Common reducer-backed controls only emit a typed component action and leave
 // the owner unchanged. These helpers keep that event plumbing out of views.
 pub fun on_store_click<s,t,a,e::E>(name : string, binding : store_binding<t,a>, action : a) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener

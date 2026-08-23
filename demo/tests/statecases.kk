@@ -105,3 +105,20 @@ pub fun listener_registry_guard_test() : <div> test_result
     "Listener registry guards",
     "duplicate-count=" ++ duplicate_count.show ++ ", duplicate-warnings=" ++ duplicate_warnings.show ++ ", merged-warnings=" ++ merged_warnings.show ++ ", semantic=" ++ merged_semantic,
     duplicate_count == 1 && duplicate_warnings == 1 && merged_warnings == 1 && merged_semantic == "danger-remove")
+
+pub fun typed_action_listener_test() : <div> test_result
+  val ((_listeners, _tree, _effects), registry) = run_event_registry(fn() run_local_state(Nil, fn() component("action-listeners", fn() {
+    val click = on_action_click("add-two", action = 2, dispatch = fn(amount : int, owner : int) owner + amount)
+    val enter = on_action_enter("add-three", action = 3, dispatch = fn(amount : int, owner : int) owner + amount)
+    (click, enter)
+  })))
+  val click_result = match find_registered_click_by_semantic(registry, "add-two")
+    Just(found) -> run_registered_click(found, 10)
+    Nothing -> -1
+  val enter_result = match find_registered_click_by_semantic(registry, "add-three")
+    Just(found) -> run_registered_click(found, 10)
+    Nothing -> -1
+  Test_result(
+    "Typed action listeners dispatch captured actions",
+    "click=" ++ click_result.show ++ ", enter=" ++ enter_result.show ++ ", registered=" ++ count_registered_clicks(registry).show,
+    click_result == 12 && enter_result == 13 && count_registered_clicks(registry) == 2)

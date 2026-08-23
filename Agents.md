@@ -142,6 +142,8 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 
 - 业务组件用 `use_store(spec, initial = ...)` 读取一个 typed binding，状态从 `binding.current` 解构。
 - UI 事件优先用 `on_store_click(...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
+- domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_enter(...)`，不要在每个 element 内重复 `fn(owner) dispatch(action, owner)`。
+- 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
 - 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
 - scope/path/slot/tree 属于 framework/runtime 细节。列表组件用 `components(items, group = ..., key = ..., render = ...)` 建立稳定 identity。
 - 组件外协调状态时用 `current_store_state(...)` / `dispatch_store(...)` 这类 typed API；不要在业务模块复制 tree 编解码。
@@ -158,6 +160,13 @@ val Task_editor_state(editing, draft) = editor.current
 input_text(
   draft,
   input = on_store_input("draft-input", editor, Change_draft))
+
+button(
+  "Save",
+  click = on_action_click(
+    "save-edit",
+    action = Save_task,
+    dispatch = dispatch))
 ```
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。

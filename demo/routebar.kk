@@ -9,7 +9,7 @@ alias route_bar_effect = <hook_scope,listener_registry<model,browser_event_effec
 
 fun route_button(label : string, route_name : string, active : bool) : route_bar_effect vnode
   val class_name = if active then "button route-tab route-tab-active" else "button route-tab"
-  button(label, class = class_name, click = on_local_click("nav-" ++ route_name, fn(owner : model) owner(route_name = normalize_route(route_name))))
+  button(label, class = class_name, click = on_action_click("nav-" ++ route_name, action = Navigate(route_name), dispatch = dispatch_route_action))
 
 fun lab_subroutes(active_route : string) : route_bar_effect vnode
   div([

@@ -97,8 +97,11 @@ pub fun tasks_for(filter_name : string, tasks : list<task>) : <div> list<task>
   with val current_filter = filter_name
   visible_tasks(tasks)
 
+pub fun dispatch_route_action(action : route_action, item : model) : <div> model
+  item(route_name = normalize_route(route_action_target(action)))
+
 pub fun handle_route_click(payload : string, item : model) : <div> maybe<model>
-  route_click_target(payload).map(fn(route_name) item(route_name = route_name))
+  decode_route_action(payload).map(fn(action) dispatch_route_action(action, item))
 
 // Route changes remain data-only; render-time hooks now decide whether to execute browser effects.
 pub fun reduce_click(payload : string, item : model) : <browser_host,div> model

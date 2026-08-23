@@ -27,7 +27,7 @@ JavaScript hot replacement or be restored from `localStorage`.
 | component boundary | `component_root(...)` / `component_in(...)` |
 | local reducer | `use_store(spec, initial=...)` |
 | local dispatch | `binding.send(action)` or `on_store_*` |
-| app reducer/action | typed feature actions dispatched through the app runtime |
+| app reducer/action | `on_action_click(...)` / `on_action_enter(...)` |
 | `useEffect`-like hook | `state_effect(name=..., deps=..., action=...)` |
 | Context-like value | a Koka `val` effect |
 | browser/service capability | a Koka `fun` effect |
@@ -143,10 +143,16 @@ State and listener identity use stable component scopes. Listeners add an event
 kind and a semantic name, for example:
 
 ```koka
-on_local_click("save-edit", fn(owner) ...)
+on_action_click("save-edit", action = Save_task, dispatch = dispatch)
+on_action_enter("save-edit", action = Save_task, dispatch = dispatch)
 on_local_input("draft-input", fn(value, owner) ...)
-on_local_enter("send-reply", fn(owner) ...)
 ```
+
+When an event only sends a typed domain action, `on_action_click(...)` and
+`on_action_enter(...)` keep the action, semantic listener name, and dispatch
+function visible without repeating `fn(owner) dispatch(action, owner)` in every
+element. `on_local_*` remains the escape hatch for handlers with custom
+branching or direct model updates.
 
 At render time `run_event_registry(...)` collects typed Koka callbacks and
 returns small listener tokens to the VDOM. `render_node(...)` serializes those
@@ -160,8 +166,9 @@ Store listeners are intentionally a narrower convenience layer:
 
 - `on_store_click(...)` emits one typed local action;
 - `on_store_input(...)` converts the input string into one typed local action;
-- `on_local_*` remains available when the event also changes the owner model or
-  invokes other effects.
+- `on_action_*` dispatches typed domain actions and can still expose reducer
+  effects;
+- `on_local_*` remains available when an event needs custom component logic.
 
 ## State snapshots, HMR, and reloads
 
