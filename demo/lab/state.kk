@@ -19,6 +19,7 @@ fun encode_incident_local_state(current : incident_local_state) : string
 
 fun decode_incident_local_state(version : int, payload : string) : maybe<incident_local_state>
   if version != 1 then Nothing
+  else if payload == "" then Nothing
   else if payload.head == "1" then Just(Incident_local_state(True, payload.tail))
   else if payload.head == "0" then Just(Incident_local_state(False, payload.tail))
   else Nothing
@@ -31,6 +32,7 @@ fun encode_incident_local_action(action : incident_local_action) : string
 
 fun decode_incident_local_action(version : int, payload : string) : maybe<incident_local_action>
   if version != 1 then Nothing
+  else if payload == "" then Nothing
   else if payload == "t" then Just(Toggle_incident)
   else if payload == "f" then Just(Finish_incident_reply)
   else if payload.head == "d" then Just(Change_incident_draft(payload.tail))

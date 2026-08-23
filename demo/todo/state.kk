@@ -23,6 +23,7 @@ fun encode_task_editor(current : task_editor_state) : string
 
 fun decode_task_editor(version : int, payload : string) : maybe<task_editor_state>
   if version != 1 then Nothing
+  else if payload == "" then Nothing
   else if payload.head == "1" then Just(Task_editor_state(True, payload.tail))
   else if payload.head == "0" then Just(Task_editor_state(False, payload.tail))
   else Nothing
@@ -36,10 +37,11 @@ fun encode_task_editor_action(action : task_editor_action) : string
 
 fun decode_task_editor_action(version : int, payload : string) : maybe<task_editor_action>
   if version != 1 then Nothing
+  else if payload == "" then Nothing
+  else if payload == "f" then Just(Finish_edit)
   else if payload.head == "b" then Just(Begin_edit(payload.tail))
   else if payload.head == "d" then Just(Change_draft(payload.tail))
   else if payload.head == "c" then Just(Cancel_edit(payload.tail))
-  else if payload == "f" then Just(Finish_edit)
   else Nothing
 
 pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = Store_spec(

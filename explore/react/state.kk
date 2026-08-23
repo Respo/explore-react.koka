@@ -56,6 +56,9 @@ inline extern snapshot_escape(text : string) : string
 inline extern snapshot_unescape(text : string) : string
   js inline "((s) => { try { return decodeURIComponent(s); } catch (_) { return ''; } })(#1)"
 
+inline extern snapshot_unescape_valid(text : string) : bool
+  js inline "((s) => { try { decodeURIComponent(s); return true; } catch (_) { return false; } })(#1)"
+
 pub struct scheduled_effect(path : string, run : () -> io ())
 pub struct registered_click<s,e::E>(id : string, semantic_name : string, run : (s) -> <div|e> s)
 pub struct registered_input<s>(id : string, semantic_name : string, run : (string, s) -> <local_state_read,local_state_write,div> s)
@@ -695,11 +698,15 @@ pub fun encode_state_snapshot(tree : list<state_entry>) : <div> string
 
 fun decode_snapshot_entry(line : string) : maybe<state_entry>
   match split(line, "|")
-    [encoded_path, encoded_schema, version, encoded_payload] ->
-      val path = snapshot_unescape(encoded_path)
-      val schema = snapshot_unescape(encoded_schema)
-      if path == "" || schema == "" then Nothing
-      else parse-int(version).map(fn(value) State_entry(path, schema, value, snapshot_unescape(encoded_payload)))
+    [encoded_path, encoded_schema, version, encoded_payload] -> {
+      if not(snapshot_unescape_valid(encoded_path) && snapshot_unescape_valid(encoded_schema) && snapshot_unescape_valid(encoded_payload)) then Nothing
+      else {
+        val path = snapshot_unescape(encoded_path)
+        val schema = snapshot_unescape(encoded_schema)
+        if path == "" || schema == "" then Nothing
+        else parse-int(version).map(fn(value) State_entry(path, schema, value, snapshot_unescape(encoded_payload)))
+      }
+    }
     _ -> Nothing
 
 fun decode_snapshot_lines(lines : list<string>) : list<state_entry>

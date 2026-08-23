@@ -1,6 +1,8 @@
 module demo/tests/statecases
 
 import demo/tests/support
+import demo/lab/state
+import demo/todo/state
 import explore/react/core
 import explore/react/state
 
@@ -30,6 +32,26 @@ pub fun generic_state_codec_test() : <div> test_result
   val draft_after = read_named_local_state(next_tree, "implicit-codec", "draft", "")
   val open_after = read_named_local_state(next_tree, "implicit-codec", "open", False)
   Test_result("Implicit use_state codec", "draft=" ++ draft ++ ", open-before=" ++ open_before.show ++ ", open-after=" ++ open_after.show, draft == "hello" && not(open_before) && draft_after == "hello world" && open_after)
+
+pub fun malformed_store_payload_test() : <div> test_result
+  val todo_scope = "tests/malformed-todo"
+  val todo_initial = Task_editor_state(False, "todo fallback")
+  val todo_tree = [State_entry(named_local_state_path(todo_scope, "editor"), "todo/task-editor", 1, "")]
+  val todo_state = read_store_state(todo_tree, todo_scope, task_editor_store, todo_initial)
+  val todo_action_safe = match decode_store_action(task_editor_store, State_action(todo_scope, "todo/task-editor-action", 1, ""))
+    Nothing -> True
+    _ -> False
+  val lab_scope = "tests/malformed-lab"
+  val lab_initial = Incident_local_state(False, "lab fallback")
+  val lab_tree = [State_entry(named_local_state_path(lab_scope, "incident"), "lab/incident-local", 1, "")]
+  val lab_state = read_store_state(lab_tree, lab_scope, incident_local_store, lab_initial)
+  val lab_action_safe = match decode_store_action(incident_local_store, State_action(lab_scope, "lab/incident-local-action", 1, ""))
+    Nothing -> True
+    _ -> False
+  val malformed_snapshot_safe = is-empty(decode_state_snapshot("path|schema|1|bad%"))
+  val empty_snapshot_payload_valid = length(decode_state_snapshot("path|schema|1|")) == 1
+  val passed = todo_state.draft == "todo fallback" && lab_state.draft == "lab fallback" && todo_action_safe && lab_action_safe && malformed_snapshot_safe && empty_snapshot_payload_valid
+  Test_result("Malformed store payloads are rejected", "todo=" ++ todo_action_safe.show ++ ", lab=" ++ lab_action_safe.show ++ ", snapshot=" ++ malformed_snapshot_safe.show, passed)
 
 pub fun auto_hook_scope_test() : <div> test_result
   val ((left_before, right_before), next_tree, pending_effects) = run_local_state(Nil, fn() {

@@ -21,6 +21,7 @@ pub fun demo_test_results() : <div> list<test_result>
     route_bar_click_is_local_test(),
     state_tree_test(),
     generic_state_codec_test(),
+    malformed_store_payload_test(),
     auto_hook_scope_test(),
     listener_registry_guard_test(),
     todo_editor_store_protocol_test(),

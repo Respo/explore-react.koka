@@ -4,19 +4,38 @@ import * as initialRuntime from "./generated/koka-entry";
 const root = document.querySelector("#app");
 const stateSnapshotKey = "koka-respo:component-state:v1";
 let runtime = initialRuntime;
+let snapshotWriteFrame = null;
 
 if (root === null) {
   throw new Error("Missing #app root element.");
 }
 
-function saveSnapshot() {
-  const snapshot = runtime.exportStateSnapshot();
+function writeSnapshot(snapshot) {
   try {
     localStorage.setItem(stateSnapshotKey, snapshot);
   } catch (error) {
     console.warn("Could not persist the Respo component-state snapshot.", error);
   }
   return snapshot;
+}
+
+function flushSnapshot() {
+  if (snapshotWriteFrame !== null) {
+    cancelAnimationFrame(snapshotWriteFrame);
+    snapshotWriteFrame = null;
+  }
+  const snapshot = runtime.exportStateSnapshot();
+  return writeSnapshot(snapshot);
+}
+
+function scheduleSnapshotSave() {
+  if (snapshotWriteFrame !== null) {
+    return;
+  }
+  snapshotWriteFrame = requestAnimationFrame(() => {
+    snapshotWriteFrame = null;
+    writeSnapshot(runtime.exportStateSnapshot());
+  });
 }
 
 function loadSnapshot() {
@@ -31,15 +50,15 @@ function loadSnapshot() {
 function installBridges() {
   window.__kokaDispatchClick = (payload) => {
     runtime.dispatchClick(payload);
-    saveSnapshot();
+    scheduleSnapshotSave();
   };
   window.__kokaDispatchInput = (channel, value) => {
     runtime.dispatchInput(channel, value);
-    saveSnapshot();
+    scheduleSnapshotSave();
   };
   window.__kokaDispatchRoute = (routeName) => {
     runtime.dispatchRoute(routeName);
-    saveSnapshot();
+    scheduleSnapshotSave();
   };
 }
 
@@ -48,20 +67,21 @@ const restoredSnapshot =
 
 installBridges();
 runtime.bootWithSnapshot("app", restoredSnapshot);
+window.addEventListener("pagehide", flushSnapshot);
 
 if (import.meta.hot) {
   import.meta.hot.accept("./generated/koka-entry", (nextRuntime) => {
     if (nextRuntime == null) {
       return;
     }
-    const snapshot = runtime.exportStateSnapshot();
+    const snapshot = flushSnapshot();
     runtime = nextRuntime;
     installBridges();
     runtime.bootWithSnapshot("app", snapshot);
-    saveSnapshot();
+    flushSnapshot();
   });
 
   import.meta.hot.dispose((data) => {
-    data.stateSnapshot = saveSnapshot();
+    data.stateSnapshot = flushSnapshot();
   });
 }
