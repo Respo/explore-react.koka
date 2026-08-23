@@ -1,13 +1,14 @@
 module demo/tests/support
 
 import demo/dialogs
+import demo/lab/events
 import demo/lab/state
-import demo/labpanel
 import demo/model
 import demo/runtimeframe
 import demo/seed
 import demo/todo/state
-import demo/todopanel
+import demo/todo/view
+import demo/todo/viewmodel
 import library/bridge
 import library/route
 import library/search
@@ -119,7 +120,7 @@ pub fun bridge_base_model() : model
 
 pub fun bridge_click(owner : model, payload : string) : <browser_host,request_bridge_resource,div> model
   val (next, _runtime_tree) = run_local_action(Nil, fn() {
-    match handle_lab_click(payload, owner)
+    match route_lab_click(payload, owner)
       Just(result) -> result
       Nothing -> owner
   })
@@ -149,7 +150,7 @@ pub fun search_base_model() : model
 pub fun capture_search_input(owner : model, value : string) : <div> (model, list<string>, list<string>)
   capture_bridge(fn() {
     val (next, _runtime_tree) = run_local_action(Nil, fn() {
-      match handle_lab_input(search_query_channel(), value, owner)
+      match route_lab_input(search_query_channel(), value, owner)
         Just(result) -> result
         Nothing -> owner
     })
@@ -255,7 +256,7 @@ pub struct component_harness
   runtime_tree : list<state_entry>
 
 pub fun todo_harness_render(frame : runtime_frame) : <div> component_harness
-  val (next_frame, tree, effects, registry) = run_runtime_render(frame, run_todo_panel)
+  val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) run_stateful_component(owner, fn(current) todo_panel(todo_panel_state_of(current))))
   Component_harness(runtime_frame/owner(next_frame), tree, effects, registry, runtime_frame/runtime_tree(next_frame))
 
 pub fun todo_harness(owner : model) : <div> component_harness

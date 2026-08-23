@@ -24,8 +24,8 @@ fun append_tasks(tasks : list<task>, item : task) : <div> list<task>
 fun clear_completed_tasks(tasks : list<task>) : <div> list<task>
   filter(tasks, fn(item) not(item.done))
 
-fun clear_done_local_state(tasks : list<task>) : <local_state_write,div> ()
-  clear_done_task_editors(tasks)
+fun clear_done_local_state(tasks : list<task>, panel_key : string) : <local_state_write,div> ()
+  clear_done_task_editors(tasks, panel_key = panel_key)
 
 fun todo_add_task(owner : model) : <browser_host,div> model
   if owner.draft == "" then
@@ -39,49 +39,50 @@ fun todo_add_task(owner : model) : <browser_host,div> model
     with_next_id(notice = "Added a new task from the Koka store.")
   }
 
-fun todo_handle_clear_completed(owner : model) : <browser_host,local_state_write,div> model
+fun todo_handle_clear_completed(owner : model, panel_key : string) : <browser_host,local_state_write,div> model
   if not(any(owner.tasks, fn(item) item.done)) then
     owner(notice = "There are no completed tasks to clear.")
   else if confirm_action("Clear every completed task?") then {
     audit("Cleared completed tasks.")
-    clear_done_local_state(owner.tasks)
+    clear_done_local_state(owner.tasks, panel_key = panel_key)
     val next = owner(tasks = clear_completed_tasks(owner.tasks))
     next(notice = "Completed tasks cleared after confirm effect.")
   } else
     owner(notice = "Clear completed cancelled.")
 
-pub fun dispatch_todo_action(action : todo_action, owner : model) : <browser_event_effect,div> model
+pub fun dispatch_todo_action(action : todo_action, owner : model, panel_key : string = "panel") : <browser_event_effect,div> model
   match action
     Add_task -> todo_add_task(owner)
     Set_filter(filter_name) -> owner(filter_name = filter_name, notice = "Primary list switched to `" ++ filter_name ++ "`.")
-    Clear_completed -> todo_handle_clear_completed(owner)
+    Clear_completed -> todo_handle_clear_completed(owner, panel_key = panel_key)
 
 pub fun dispatch_task_item_action(
   action : task_item_action,
   item : task,
-  owner : model
+  owner : model,
+  panel_key : string = "panel"
 ) : <browser_event_effect,div> model
   val tid = task/id(item)
   match action
     Edit_task -> {
       audit("Opened local edit state for task #" ++ tid.show)
-      dispatch_task_editor(item, Begin_edit(item.title))
+      dispatch_task_editor(item, Begin_edit(item.title), panel_key = panel_key)
       owner(notice = "Editing task locally before committing the title.")
     }
     Save_task -> {
-      val draft = current_task_editor(item).draft
+      val draft = current_task_editor(item, panel_key = panel_key).draft
       if draft == "" then
         owner(notice = "Task title cannot be empty.")
       else {
         audit("Saved local task edit for #" ++ tid.show)
-        dispatch_task_editor(item, Finish_edit)
+        dispatch_task_editor(item, Finish_edit, panel_key = panel_key)
         owner(
           tasks = map(owner.tasks, fn(task_item) if task/id(task_item) == tid then task_item(title = draft) else task_item),
           notice = "Saved task title from local state.")
       }
     }
     Cancel_task -> {
-      dispatch_task_editor(item, Cancel_edit(item.title))
+      dispatch_task_editor(item, Cancel_edit(item.title), panel_key = panel_key)
       owner(notice = "Cancelled local task edit.")
     }
     Toggle_task -> {
@@ -93,7 +94,7 @@ pub fun dispatch_task_item_action(
     Remove_task -> {
       if confirm_action("Remove `" ++ item.title ++ "`?") then {
         audit("Removed task after confirmation: " ++ item.title)
-        clear_task_editor(item)
+        clear_task_editor(item, panel_key = panel_key)
         owner(
           tasks = filter(owner.tasks, fn(task_item) task/id(task_item) != tid),
           notice = "Task removed after confirm effect.")

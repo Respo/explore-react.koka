@@ -22,10 +22,10 @@ JavaScript hot replacement or be restored from `localStorage`.
 
 | React idea | This repo in Koka |
 | --- | --- |
-| function component | a plain function returning `vnode` |
-| keyed child component | `components(items, group=..., key=..., render=...)` |
-| root component | `run_component(owner, group=..., key=..., render=...)` |
-| keyed child boundary | `component_in(...)` / `components(...)` |
+| view function | a function returning an `app_view vnode` expression |
+| keyed component instance | `component(...)` / `components(...)` |
+| reusable persistent feature | an exported component owns `feature_root(...)` and may expose labelled `key`; app singletons keep a fixed identity |
+| app runtime | one `run_component(...)` call at the integration boundary |
 | local reducer | `(state, dispatch) = use_store(spec, initial=...)` |
 | local dispatch | `dispatch(action)` or `on_store_*` |
 | app reducer/action | `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` |
@@ -73,36 +73,107 @@ For example, Search exposes `on_input = ...`, `on_submit = ...`, and
 `on_select = ...`; it does not ask callers to manufacture raw DOM payloads or
 know which listener registry path the framework assigns.
 
+Component signatures use one application alias, `app_view`, instead of
+listing `hook_scope`, state-tree access, scheduled effects, and the listener
+registry in every view file. The alias hides runtime plumbing without weakening
+the type of the component body.
+
+A function call alone does not create component identity. A stateful reusable
+child is evaluated inside `component(...)` or `components(...)`; a persistent
+top-level feature establishes `feature_root(...)`. Pure view helpers can remain
+ordinary function calls because they do not need their own lifecycle.
+
+Component boundaries use Koka's trailing-lambda syntax—
+`feature_root("todo", key) { ... }` and `component("tasks", key) { ... }`—so
+lifecycle-bearing code is visually distinct from an ordinary view helper.
+Component props and element attributes remain flat labelled arguments.
+
 For repeated children, `components(...)` owns the keyed component boundary:
 
 ```koka
-div(
-  components(
-    lab.incidents,
-    group = "incidents",
-    key = fn(item) incident/id(item).show,
-    render = incident_card),
-  class = "incident-grid")
+fun incident_grid(lab : workflow_lab, panel_key : string) : app_view vnode
+  div(
+    components(
+      lab.incidents,
+      group = "incidents",
+      key = fn(item) incident/id(item).show,
+      render = fn(item) incident_card(item, panel_key = panel_key)),
+    class = "incident-grid")
 ```
 
 This is more than a shorter `map`: the `group + key` pair determines the stable
 scope used by the child component's state, effects, and named listeners.
 
-At an app integration boundary, `run_component(...)` combines runtime handling
-with one stable root scope. Identity and the component body stay labelled so
-the boundary remains self-describing:
+An exported feature component owns its stable absolute root and still composes
+as a `vnode` expression:
+
+```koka
+pub fun todo_panel(
+  panel_state : todo_panel_state,
+  key : string = "panel"
+) : app_view vnode
+  feature_root("todo", key) {
+    panel(
+      [...],
+      key = feature_node_key(group = "todo", key = key))
+  }
+```
+
+Layouts therefore compose components as ordinary values, without receiving or
+merging runtime tuples:
+
+```koka
+section([
+  route_bar(item),
+  todo_panel(todo_panel_state_of(item)),
+  lab_panel(item),
+])
+```
+
+The default key preserves the normal singleton path `todo/panel`. Rendering a
+second instance gives it an independent component runtime scope:
+
+```koka
+todo_panel(todo_panel_state_of(item), key = "compact")
+```
+
+That key isolates local stores, effects, listeners, and DOM effect markers.
+Domain data is still shared when both instances receive values derived from the
+same application model, just as two controlled React components can receive the
+same props. Any feature code that coordinates a child store outside its render
+function must carry the same feature key; raw scope paths stay inside the state
+module.
+
+`feature_node_key(group = ..., key = ...)` and
+`feature_dom_marker(group = ..., key = ..., name = ...)` centralize the matching
+VDOM/DOM naming rule. The default instance keeps its established browser names;
+additional instances receive a group-prefixed name automatically.
+
+Key segments use collision-free URI encoding. Existing non-empty slugs and
+numeric IDs keep their established runtime paths. Snapshots created with the
+older ambiguous encoding for empty, underscore-leading, or reserved-character
+keys fall back to the component's initial value once; current application keys
+are unaffected.
+
+Only the app integration boundary installs the runtime:
 
 ```koka
 run_component(
   item,
-  group = "todo",
-  key = "panel",
-  render = fn(owner) render_todo_panel(todo_panel_state_of(owner)))
+  group = "app",
+  key = "root",
+  render = fn(owner) render_layout(owner, results))
 ```
 
 The explicit `group + key` remains intentional. Unlike React, an ordinary Koka
 function call does not create a fiber identity that the runtime can recover
-implicitly across list reordering or hot replacement.
+implicitly across list reordering or hot replacement. Keeping feature roots
+absolute also preserves existing snapshot paths when a panel moves in the
+layout.
+
+The single runtime collects listeners and scheduled effects in component
+evaluation order (shell, active feature tree, then overlay). Components should
+not use cross-component effect ordering as a data dependency.
 
 ## Typed component stores
 
@@ -163,9 +234,9 @@ component call. Explicit scope/path/tree access is reserved for framework code
 and the small amount of feature coordination that must address a component
 outside its render function.
 
-Feature render and panel APIs do not receive or return the runtime tree. The app
-boundary owns it through `runtime_frame`, and `run_runtime_render(...)` threads
-it through component runners. Parent views also avoid inspecting child stores;
+Feature render and panel APIs return only `vnode`. The app boundary owns the
+runtime tree through `runtime_frame`, and one `run_component(...)` pass collects
+state, scheduled effects, and listeners for the full tree. Parent views also avoid inspecting child stores;
 state needed by a parent should be promoted to domain state instead of read
 back from a child's local cell.
 

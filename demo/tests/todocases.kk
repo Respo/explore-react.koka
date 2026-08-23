@@ -5,22 +5,23 @@ import demo/model
 import demo/seed
 import demo/tests/support
 import demo/todo/state
-import demo/todopanel
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
 
 pub fun todo_editor_store_protocol_test() : <div> test_result
-  val scope_name = "tests/task-editor"
+  val scope_group = "tests"
+  val scope_key = "task-editor"
+  val scope_name = component_local_path(scope_group, scope_key)
   val initial = Task_editor_state(False, "Initial")
-  val (_before, tree, _effects) = run_local_state(Nil, fn() component(scope_name, fn() {
+  val (_before, tree, _effects) = run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
     val (current, dispatch) = use_store(task_editor_store, initial = initial)
     dispatch(Begin_edit("Draft | with separator"))
     current
   }))
   val current = read_store_state(tree, scope_name, task_editor_store, initial)
   val restored = read_store_state(decode_state_snapshot(encode_state_snapshot(tree)), scope_name, task_editor_store, initial)
-  val (_sequential_before, sequential_tree, _sequential_effects) = run_local_state(Nil, fn() component(scope_name, fn() {
+  val (_sequential_before, sequential_tree, _sequential_effects) = run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
     val (_current, dispatch) = use_store(task_editor_store, initial = initial)
     dispatch(Begin_edit("Sequential draft"))
     dispatch(Finish_edit)

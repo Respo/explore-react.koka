@@ -8,7 +8,8 @@ import demo/runtimeframe
 import demo/seed
 import demo/lab/state
 import demo/lab/workflow
-import demo/labpanel
+import demo/lab/events
+import demo/lab/view
 import demo/tests/appharness
 import demo/tests/support
 import explore/react/core
@@ -17,20 +18,62 @@ import explore/react/state
 pub fun lab_local_routing_test() : <div> test_result
   with with_test_browser(False, "T+120")
   val base = initial_model()(route_name = normalize_route("lab"))
-  val (base_frame, _tree, _effects, _registry) = run_runtime_render(current_runtime_frame(base, Nil), run_lab_panel)
-  val base_runtime_tree = runtime_frame/runtime_tree(base_frame)
+  val base_runtime_tree = app_harness(base).runtime_tree
   val drafted = run_runtime_action(current_runtime_frame(base, base_runtime_tree), fn(owner) {
-    match handle_lab_input("lab-draft-101", "Shift traffic to backup POP.", owner)
+    match route_lab_input("lab-draft-101", "Shift traffic to backup POP.", owner)
       Just(result) -> result
       Nothing -> owner
   })
   val toggled = run_runtime_action(drafted, fn(owner) {
-    match handle_lab_click("lab-toggle-101", owner)
+    match route_lab_click("lab-toggle-101", owner)
       Just(result) -> result
       Nothing -> owner
   })
   val toggled_runtime_tree = toggled.runtime_tree
   Test_result("Workflow lab local routing", "draft=" ++ inspect_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ inspect_incident_expanded(toggled_runtime_tree, 101).show, inspect_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && inspect_incident_expanded(toggled_runtime_tree, 101))
+
+fun lab_feature_pair_render(frame : runtime_frame) : <div> component_harness
+  val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) run_stateful_component(owner, fn(current) div([
+    lab_panel(current, key = "left"),
+    lab_panel(current, key = "right"),
+  ])))
+  Component_harness(runtime_frame/owner(next_frame), tree, effects, registry, runtime_frame/runtime_tree(next_frame))
+
+pub fun lab_feature_key_action_isolation_test() : <div> test_result
+  with with_test_browser(False, "T+120")
+  val base = initial_model()(route_name = normalize_route("lab"))
+  val incident_id = 102
+  val initial_local = Incident_local_state(False, "")
+  val left_scope = component_child_path(component_local_path("lab", "left"), "incidents", incident_id.show)
+  val right_scope = component_child_path(component_local_path("lab", "right"), "incidents", incident_id.show)
+  val default_scope = component_child_path(component_local_path("lab", "panel"), "incidents", incident_id.show)
+  val left_input = named_local_listener_path(left_scope, Input_event, "draft-input")
+  val right_input = named_local_listener_path(right_scope, Input_event, "draft-input")
+  val left_send = named_local_listener_path(left_scope, Click_event, "send-reply")
+
+  val h0 = lab_feature_pair_render(current_runtime_frame(base, Nil))
+  val h1 = harness_fire_input_channel(h0, left_input, "left reply payload", lab_feature_pair_render)
+  val h2 = harness_fire_input_channel(h1, right_input, "right reply stays local", lab_feature_pair_render)
+  val left_before = read_store_state(h2.runtime_tree, left_scope, incident_local_store, initial_local)
+  val right_before = read_store_state(h2.runtime_tree, right_scope, incident_local_store, initial_local)
+  val default_untouched = not(any(h2.runtime_tree, fn(entry) state_entry/path(entry) == named_local_state_path(default_scope, "incident")))
+  val h3 = harness_fire_click_payload(h2, left_send, lab_feature_pair_render)
+  val left_after = read_store_state(h3.runtime_tree, left_scope, incident_local_store, initial_local)
+  val right_after = read_store_state(h3.runtime_tree, right_scope, incident_local_store, initial_local)
+  val default_still_untouched = not(any(h3.runtime_tree, fn(entry) state_entry/path(entry) == named_local_state_path(default_scope, "incident")))
+  val domain_reply = match find(h3.owner.lab.incidents, fn(item) incident/id(item) == incident_id)
+    Just(item) -> item.server_note
+    Nothing -> "missing"
+  val registries_clean =
+    is-empty(h0.registry.warnings) && is-empty(h1.registry.warnings) &&
+    is-empty(h2.registry.warnings) && is-empty(h3.registry.warnings)
+  Test_result(
+    "Feature component keys isolate Lab actions",
+    "before=" ++ left_before.draft ++ "/" ++ right_before.draft ++ ", after=" ++ left_after.draft ++ "/" ++ right_after.draft ++ ", reply=" ++ domain_reply,
+    left_before.draft == "left reply payload" && right_before.draft == "right reply stays local" &&
+    default_untouched && default_still_untouched && left_after.draft == "" && left_after.expanded &&
+    right_after.draft == "right reply stays local" && not(right_after.expanded) &&
+    domain_reply == "left reply payload" && registries_clean)
 
 pub fun component_action_props_test() : <div> test_result
   val search_harness = app_harness(initial_model()(route_name = normalize_route("lab-search")))

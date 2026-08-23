@@ -25,9 +25,12 @@
 
 ### Component identity
 
-- app 集成层用 `run_component(owner, group = ..., key = ..., render = ...)` 同时建立 runtime 与 root identity；
-- 单个 child 边界由 `component_in(...)` 表达；
+- app 集成层只运行一次 `run_component(owner, group = ..., key = ..., render = ...)`；
+- Todo、Lab、Effects 等可复用 feature component 自己持有 `feature_root(...)`，以 labelled `key` 隔离 local store、effect、listener 和 DOM marker，对外只返回 `vnode`；domain data 是否共享仍由传入 props 决定；全局 Dialog overlay 明确为 app-owned singleton，不暴露半完整的多实例 key；
+- 单个 child 边界由 `component(...)` 表达；
 - 列表统一使用 `components(items, group = ..., key = ..., render = ...)`；
+- 单个 component/feature boundary 使用 trailing-lambda block（`component(group, key) { ... }`），让带 lifecycle 的调用在语法上与普通 view helper 明显区分；
+- `component_effect<s,e>` 在应用侧绑定为 `app_view`，view 不再展开 framework effect row；
 - 业务组件不再手工拼装 listener/effect/store path；
 - state、effect 和 named listener 共享稳定的 keyed component scope。
 
@@ -55,12 +58,15 @@
 
 - component state tree 已从业务 `model` 移出；
 - `demo/runtimeframe.kk` 是 app model 与 runtime tree 的统一 owner；
-- feature/view runner 不再接收或返回 `list<state_entry>`，统一由 `run_runtime_render(...)` 在线程边界读写；
-- app shell 与 feature runners 按顺序运行，避免嵌套 runtime handler 覆盖 child store 更新；
+- feature component 只返回 `vnode`，不再暴露 `(owner, vnode, effects, registry)` 四元组；
+- 整棵 app tree 在一个 runtime handler 内渲染，由 `run_runtime_render(...)` 在线程边界读写状态树；
+- feature 使用绝对 root scope，保持 HMR/localStorage snapshot path 不受 layout 移动影响；
+- feature 外协调 child store 时必须携带同一个 feature key，并只在 state 模块内部计算 scope path；
 - 父组件不再读取子组件 local store 做汇总；跨组件真正需要的数据应提升为 domain state；
 - 旧的 `demo/runtimebridge.kk` / `demo/runtimeowner.kk` 过渡层已经删除；
 - snapshot 使用 path + schema + version + payload；
 - malformed snapshot、unknown schema 和 version mismatch 会安全回退；
+- key segment 使用无碰撞 canonical encoding；现有 slug/数字路径保持不变，旧版空串、下划线开头或保留字符 key 的 snapshot 允许一次性回退 initial state；
 - `src/main.js` 在事件后合并保存，并在 HMR replacement、dispose、`pagehide` 前 flush；
 - 同一 snapshot 同时支持开发时 JS 替换和普通页面的 localStorage 恢复。
 
@@ -73,8 +79,10 @@ div(children, class = ..., key = ...)
 button(text, class = ..., click = ...)
 input_text(value, input = ..., enter = ..., placeholder = ...)
 
-run_component(owner, group = ..., key = ..., render = fn(owner) ...)
-component_in(group = ..., key = ..., render = fn() ...)
+feature_root(group, key) { ... }
+feature_node_key(group = ..., key = ...)
+feature_dom_marker(group = ..., key = ..., name = ...)
+component(group, key) { ... }
 components(items, group = ..., key = ..., render = ...)
 
 use_store(spec, initial = ...)
@@ -101,9 +109,11 @@ clear_store_state(scope, spec)
 
 ### Framework/runtime 内部使用
 
+- `run_component(owner, group = ..., key = ..., render = ...)`，每棵 app tree 只安装一次；
+- `reset_feature(group = ..., key = ...)`，由 integration lifecycle 清理持久 feature branch；
 - `state_entry`、`state_slot`、raw tree operations；
 - codec 编解码和 snapshot wire format；
-- registry merge、handler 安装和 runtime frame plumbing；
+- handler 安装和 runtime frame plumbing；
 - raw listener payload 与 DOM delegated bridge。
 
 业务 view 不应依赖这一层。
@@ -124,13 +134,15 @@ clear_store_state(scope, spec)
 - 为 tests、devtools 和 agents 提供相同的 inspect/replay 输入；
 - 明确 replay 时 browser effects 的处理策略，避免重复执行外部副作用。
 
-### 3. 进一步精简 feature 辅助函数
+### 3. 拆分 component facade 与 runtime/testing API
 
-- 删除只转发 struct accessor 或只包装一次 framework API 的 helper；
-- typed action listener 已收敛 domain dispatch closure，后续只在出现第三种重复事件形态时扩 API；
+- 将普通组件需要的 `component/components/use_store/state_effect/on_*` 收敛到 facade；
+- 将 runner、registry、snapshot 与 tree inspection 移到 runtime/testing 模块；
+- 评估由 `feature_root` 安装 opaque feature identity context，让内部 helper 不再层层转发 `panel_key`，同时仍禁止业务 view 读取 raw scope path；
+- 为 controlled component 固定“主 domain value 位置参数 + labelled callback/config props”的签名模板，避免每个 feature 再造 props adapter；
 - scope 计算只保留在确有跨组件协调的 state 模块；
 - reducer、codec、store spec 尽量同模块定义，view 只 import typed surface；
-- 如果相同 codec 样板在第三处出现，再提炼 framework combinator，避免为两个案例过早抽象。
+- typed action listener 后续只在出现第三种重复事件形态时扩 API。
 
 ### 4. 完善 effect 生命周期
 

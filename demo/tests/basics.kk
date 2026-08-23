@@ -9,7 +9,8 @@ import demo/tests/appharness
 import demo/tests/support
 import demo/todo/events
 import demo/todo/state
-import demo/todopanel
+import demo/todo/view
+import demo/todo/viewmodel
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
@@ -47,12 +48,11 @@ pub fun ambient_filter_test() : <div> test_result
 
 pub fun registered_input_handler_test() : <div> test_result
   with with_test_browser(False, "T+0")
-  val (next_frame, _panel_node, _effects, handlers) = run_runtime_render(current_runtime_frame(initial_model(), Nil), run_todo_panel)
-  val next_item = runtime_frame/owner(next_frame)
-  val next_runtime_tree = runtime_frame/runtime_tree(next_frame)
+  val h0 = todo_harness(initial_model())
+  val handlers = h0.registry
   match find_registered_input_by_semantic(handlers, "draft-input")
     Just(found_input) -> {
-      val updated = run_runtime_action(current_runtime_frame(next_item, next_runtime_tree), fn(current_owner) run_registered_input(found_input, "closure draft", current_owner)).owner
+      val updated = run_runtime_action(current_runtime_frame(h0.owner, h0.runtime_tree), fn(current_owner) run_registered_input(found_input, "closure draft", current_owner)).owner
       Test_result("Registered input handler updates draft", "inputs=" ++ count_registered_inputs(handlers).show ++ ", draft=" ++ updated.draft, updated.draft == "closure draft")
     }
     Nothing -> Test_result("Registered input handler updates draft", "draft-input missing", False)
@@ -112,6 +112,98 @@ pub fun route_bar_click_is_local_test() : <div> test_result
     "Route bar uses local listener",
     "payload=" ++ checks_payload ++ ", route=" ++ h1.owner.route_name ++ ", local=" ++ in_registry.show,
     checks_payload == component_listener_path("app", "root", Click_event, "nav-checks") && in_registry && h1.owner.route_name == "checks")
+
+pub fun app_feature_registry_test() : <div> test_result
+  val registry = app_harness(initial_model()).registry
+  val shell_path = component_listener_path("app", "root", Click_event, "nav-checks")
+  val todo_path = component_listener_path("todo", "panel", Click_event, "add-task")
+  val lab_path = component_listener_path("lab", "panel", Click_event, "load-board")
+  val shell_registered = match find_registered_click(registry, shell_path) { Just(_) -> True; Nothing -> False }
+  val todo_registered = match find_registered_click(registry, todo_path) { Just(_) -> True; Nothing -> False }
+  val lab_registered = match find_registered_click(registry, lab_path) { Just(_) -> True; Nothing -> False }
+  Test_result(
+    "App runner collects feature components",
+    "shell=" ++ shell_registered.show ++ ", todo=" ++ todo_registered.show ++ ", lab=" ++ lab_registered.show ++ ", warnings=" ++ registry.warnings.length.show,
+    shell_registered && todo_registered && lab_registered && is-empty(registry.warnings))
+
+fun count_vnode_attr_values(nodes : list<vnode>, name : string, value : string) : <div> int
+  match nodes
+    Nil -> 0
+    Cons(node, rest) ->
+      (if vnode_get_attr(node, name) == value then 1 else 0) +
+      count_vnode_attr_values(vnode/children(node), name, value) +
+      count_vnode_attr_values(rest, name, value)
+
+fun todo_feature_pair_render(frame : runtime_frame) : <div> component_harness
+  val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) run_stateful_component(owner, fn(current) div([
+    todo_panel(todo_panel_state_of(current), key = "left"),
+    todo_panel(todo_panel_state_of(current), key = "right"),
+  ])))
+  Component_harness(runtime_frame/owner(next_frame), tree, effects, registry, runtime_frame/runtime_tree(next_frame))
+
+pub fun feature_component_key_test() : <div> test_result
+  with with_test_browser(False, "T+0")
+  val base = initial_model()
+  val target = match find(base.tasks, fn(item) task/id(item) == 2)
+    Just(item) -> item
+    Nothing -> Task(2, "missing", False)
+  val initial_editor = Task_editor_state(False, target.title)
+  val left_scope = component_child_path(component_local_path("todo", "left"), "tasks", task/id(target).show)
+  val right_scope = component_child_path(component_local_path("todo", "right"), "tasks", task/id(target).show)
+  val default_scope = component_child_path(component_local_path("todo", "panel"), "tasks", task/id(target).show)
+  val left_edit = named_local_listener_path(left_scope, Click_event, "start-edit")
+  val right_edit = named_local_listener_path(right_scope, Click_event, "start-edit")
+  val left_input = named_local_listener_path(left_scope, Input_event, "draft-input")
+  val left_save = named_local_listener_path(left_scope, Click_event, "save-edit")
+
+  val h0 = todo_feature_pair_render(current_runtime_frame(base, Nil))
+  val h1 = harness_fire_click_payload(h0, left_edit, todo_feature_pair_render)
+  val left_started = read_store_state(h1.runtime_tree, left_scope, task_editor_store, initial_editor)
+  val right_before = read_store_state(h1.runtime_tree, right_scope, task_editor_store, initial_editor)
+  val default_untouched = not(any(h1.runtime_tree, fn(entry) state_entry/path(entry) == named_local_state_path(default_scope, "editor")))
+
+  val h2 = harness_fire_input_channel(h1, left_input, "left-only title", todo_feature_pair_render)
+  val left_drafted = read_store_state(h2.runtime_tree, left_scope, task_editor_store, initial_editor)
+  val h3 = harness_fire_click_payload(h2, right_edit, todo_feature_pair_render)
+  val left_before_save = read_store_state(h3.runtime_tree, left_scope, task_editor_store, initial_editor)
+  val right_started = read_store_state(h3.runtime_tree, right_scope, task_editor_store, initial_editor)
+  val h4 = harness_fire_click_payload(h3, left_save, todo_feature_pair_render)
+  val left_saved = read_store_state(h4.runtime_tree, left_scope, task_editor_store, initial_editor)
+  val right_preserved = read_store_state(h4.runtime_tree, right_scope, task_editor_store, initial_editor)
+  val default_still_untouched = not(any(h4.runtime_tree, fn(entry) state_entry/path(entry) == named_local_state_path(default_scope, "editor")))
+  val saved_title = match find(h4.owner.tasks, fn(item) task/id(item) == 2)
+    Just(item) -> item.title
+    Nothing -> "missing"
+
+  val left_registered = match find_registered_click(h0.registry, component_listener_path("todo", "left", Click_event, "add-task")) { Just(_) -> True; Nothing -> False }
+  val right_registered = match find_registered_click(h0.registry, component_listener_path("todo", "right", Click_event, "add-task")) { Just(_) -> True; Nothing -> False }
+  val left_effect = any(h0.effects, fn(item) scheduled_effect/path(item) == component_effect_path("todo", "left", "focus-draft"))
+  val right_effect = any(h0.effects, fn(item) scheduled_effect/path(item) == component_effect_path("todo", "right", "focus-draft"))
+  val markers_unique =
+    count_vnode_attr_values([h0.tree], "data-k-effect", "todo:left:draft") == 1 &&
+    count_vnode_attr_values([h0.tree], "data-k-effect", "todo:right:draft") == 1 &&
+    count_vnode_attr_values([h0.tree], "data-k-effect", "todo:left-note") == 1 &&
+    count_vnode_attr_values([h0.tree], "data-k-effect", "todo:right-note") == 1 &&
+    count_vnode_attr_values([h3.tree], "data-k-effect", "todo:left:task-draft-2") == 1 &&
+    count_vnode_attr_values([h3.tree], "data-k-effect", "todo:right:task-draft-2") == 1
+  val default_harness = todo_harness(base)
+  val default_compatible =
+    vnode_has_attr_value(default_harness.tree, "data-k-effect", "draft") &&
+    vnode_has_attr_value(default_harness.tree, "data-k-effect", "todo-note") &&
+    (match vnode_find_key(default_harness.tree, "todo") { Just(_) -> True; Nothing -> False })
+  val registries_clean =
+    is-empty(h0.registry.warnings) && is-empty(h1.registry.warnings) &&
+    is-empty(h2.registry.warnings) && is-empty(h3.registry.warnings) &&
+    is-empty(h4.registry.warnings)
+  Test_result(
+    "Feature component keys isolate Todo actions",
+    "started=" ++ left_started.editing.show ++ "/" ++ right_started.editing.show ++ ", drafts=" ++ left_before_save.draft ++ "/" ++ right_preserved.draft ++ ", saved=" ++ saved_title ++ ", markers=" ++ markers_unique.show,
+    left_registered && right_registered && left_effect && right_effect &&
+    left_started.editing && not(right_before.editing) && default_untouched && default_still_untouched &&
+    left_drafted.draft == "left-only title" && left_before_save.draft == "left-only title" &&
+    right_started.editing && right_started.draft == target.title &&
+    not(left_saved.editing) && right_preserved.editing && right_preserved.draft == target.title &&
+    saved_title == "left-only title" && markers_unique && default_compatible && registries_clean)
 
 // --- Component harness tests ---
 // These tests exercise components by navigating the vnode tree, reading event
@@ -197,10 +289,12 @@ pub fun app_runtime_preserves_child_store_test() : <div> test_result
   val h1 = app_harness_click_payload(h0, keyed_button_payload(h0.tree, "2", "Edit"))
   val input_channel = keyed_input_channel(h1.tree, "2", "task-draft-2")
   val h2 = app_harness_input_channel(h1, input_channel, "draft through app runtime")
-  val editor_state = match find(h2.owner.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> inspect_task_editor(h2.runtime_tree, item)
+  val away = app_harness_click_payload(h2, button_payload_by_text(h2.tree, "Checks"))
+  val restored = app_harness_click_payload(away, button_payload_by_text(away.tree, "Todo"))
+  val editor_state = match find(restored.owner.tasks, fn(item) 2 == task/id(item))
+    Just(item) -> inspect_task_editor(restored.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   Test_result(
-    "App runtime preserves child store",
-    "editing=" ++ editor_state.editing.show ++ ", draft=" ++ editor_state.draft,
-    editor_state.editing && editor_state.draft == "draft through app runtime")
+    "App runtime preserves feature store",
+    "route=" ++ restored.owner.route_name ++ ", editing=" ++ editor_state.editing.show ++ ", draft=" ++ editor_state.draft,
+    restored.owner.route_name == "todo" && editor_state.editing && editor_state.draft == "draft through app runtime")

@@ -85,6 +85,10 @@ pub struct model
   lab : workflow_lab
   dialog : dialog_demo
 
+// Component files name one application-level capability instead of exposing
+// hook, state-tree, effect-queue, and listener-registry implementation details.
+pub alias app_view = component_effect<model,browser_event_effect>
+
 fun task_visible(item : task) : filter_context_effect bool
   if current_filter == "active" then not(item.done)
   else if current_filter == "done" then item.done

@@ -1,13 +1,13 @@
 module demo/controller
 
 import demo/dialogs
-import demo/labpanel
+import demo/lab/events
 import demo/model
 import library/bridge
 import library/maybe
 
 fun resolve_click(payload : string, item : model) : <browser_event_effect,div> maybe<model>
-  handle_lab_click(payload, item).or-else {
+  route_lab_click(payload, item).or-else {
     handle_dialog_click(payload, item).or-else {
       handle_route_click(payload, item)
     }
@@ -19,7 +19,7 @@ pub fun dispatch_click(payload : string, item : model) : <browser_event_effect,d
   }
 
 fun resolve_input(channel : string, value : string, item : model) : <browser_event_effect,div> maybe<model>
-  handle_lab_input(channel, value, item)
+  route_lab_input(channel, value, item)
 
 pub fun dispatch_input(channel : string, value : string, item : model) : <browser_event_effect,div> model
   resolve_input(channel, value, item).unwrap-or-else {

@@ -2,7 +2,6 @@ module demo/tests/dialogcases
 
 import demo/tests/appharness
 import demo/dialogs
-import demo/effectspanel
 import demo/model
 import demo/seed
 import demo/tests/support
@@ -61,19 +60,33 @@ pub fun dialog_prompt_submit_test() : <div> test_result
 pub fun dialog_prompt_focus_effect_test() : <div> test_result
   val (opened, _open_audits) = capture_dialog_click(dialog_base_model(), dialog_open_payload("prompt"))
   val (_next_item, overlay_node, effects, _handlers) = render_app(opened, Nil)
+  val expected_effect = component_effect_path("overlays", "dialog", "focus-dialog")
   Test_result(
     "Dialog prompt schedules focus effect",
     "effects=" ++ length(effects).show ++ ", marker=" ++ vnode_has_attr_value(overlay_node, "data-k-effect", "dialog-prompt-focus").show,
-    any(effects, fn(item) scheduled_effect/path(item) == dialog_overlay_effect_path()) && vnode_has_attr_value(overlay_node, "data-k-effect", "dialog-prompt-focus"))
+    any(effects, fn(item) scheduled_effect/path(item) == expected_effect) && vnode_has_attr_value(overlay_node, "data-k-effect", "dialog-prompt-focus"))
 
 pub fun dialog_overlay_uses_runtime_tree_test() : <div> test_result
   val (opened, _open_audits) = capture_dialog_click(dialog_base_model(), dialog_open_payload("prompt"))
   val h0 = app_harness(opened)
-  val in_runtime_tree = any(h0.runtime_tree, fn(item) state_entry/path(item) == dialog_overlay_effect_path())
+  val expected_effect = component_effect_path("overlays", "dialog", "focus-dialog")
+  val in_runtime_tree = any(h0.runtime_tree, fn(item) state_entry/path(item) == expected_effect)
   Test_result(
     "Dialog overlay uses runtime tree",
     "entries=" ++ count_entries(h0.runtime_tree).show ++ ", effect-in-tree=" ++ in_runtime_tree.show,
     in_runtime_tree)
+
+pub fun dialog_overlay_cleanup_test() : <div> test_result
+  with with_test_browser(False, "T+0")
+  val (opened, _open_audits) = capture_dialog_click(dialog_base_model(), dialog_open_payload("prompt"))
+  val h0 = app_harness(opened)
+  val closed = app_harness_click_payload(h0, button_payload_by_text(h0.tree, "Cancel"))
+  val expected_effect = component_effect_path("overlays", "dialog", "focus-dialog")
+  val effect_cleared = not(any(closed.runtime_tree, fn(item) state_entry/path(item) == expected_effect))
+  Test_result(
+    "Dialog close resets feature runtime",
+    "open=" ++ dialog_is_open(closed.owner.dialog).show ++ ", effect-cleared=" ++ effect_cleared.show ++ ", entries=" ++ closed.runtime_tree.length.show,
+    not(dialog_is_open(closed.owner.dialog)) && effect_cleared)
 
 pub fun dialog_drawer_action_test() : <div> test_result
   with with_test_browser(False, "T+0")

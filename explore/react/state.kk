@@ -30,6 +30,11 @@ pub effect hook_state
 pub effect listener_registry<s,e::E>
   fun register_listener(entry_slot : state_slot, registration : listener_registration<s,e>) : listener
 
+// The complete capability row available while rendering a stateful component.
+// Applications can bind this once to their owner and host effects instead of
+// repeating framework internals in every component signature.
+pub alias component_effect<s,e::E> = <hook_scope,hook_state,local_state_read,local_state_write,hook_effects,listener_registry<s,e>,div>
+
 pub type listener_registration<s,e::E>
   Click_registration(semantic_name : string, run : (s) -> <div|e> s)
   Input_registration(semantic_name : string, run : (string, s) -> <div|e> s)
@@ -75,9 +80,13 @@ fun join_slot_path(base : string, name : string) : string
   if base == "" then name else base ++ "/" ++ name
 
 fun normalize_slot_name(name : string) : string
+  val encoded = snapshot_escape(name)
   match list(name)
-    Nil -> "slot"
-    Cons(head, _rest) -> if head >= '0' && head <= '9' then "_" ++ name else name
+    Nil -> "__"
+    Cons(head, _rest) ->
+      if head >= '0' && head <= '9' then "_" ++ encoded
+      else if head == '_' then "__" ++ encoded
+      else encoded
 
 fun named_slot(base : string, name : string) : state_slot
   State_slot(join_slot_path(base, normalize_slot_name(name)))
@@ -133,9 +142,6 @@ pub fun run_registered_input<s,e::E>(item : registered_input<s,e>, value : strin
 pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
   Event_registry(Nil, Nil, Nil)
 
-pub fun pure_component_run<s,e::E,a>(owner : s, result : a) : <div> (s, a, list<scheduled_effect>, event_registry<s,e>)
-  (owner, result, Nil, empty_event_registry())
-
 pub fun with_component_runtime<a,e>(tree : list<state_entry>, action : () -> <component_runtime|e> a) : e (a, list<state_entry>)
   var next_tree := tree
   with return(result) (result, next_tree)
@@ -161,42 +167,6 @@ fun append_messages(left : list<string>, right : list<string>) : <div> list<stri
   match left
     Nil -> right
     Cons(head, rest) -> Cons(head, append_messages(rest, right))
-
-fun merge_registered_clicks<s,e::E>(left : list<registered_click<s,e>>, right : list<registered_click<s,e>>, warnings : list<string>) : <div> (list<registered_click<s,e>>, list<string>)
-  match right
-    Nil -> (left, warnings)
-    Cons(item, rest) ->
-      match find_click_in_list(left, registered_click/id(item))
-        Just(found) -> merge_registered_clicks(replace_registered_click(left, item), rest, Cons(if registered_click/semantic_name(found) == registered_click/semantic_name(item) then duplicate_listener_warning(registered_click/id(item), registered_click/semantic_name(item)) else semantic_drift_warning(registered_click/id(item), registered_click/semantic_name(found), registered_click/semantic_name(item)), warnings))
-        Nothing -> merge_registered_clicks(append_registered_click(left, item), rest, warnings)
-
-fun merge_registered_inputs<s,e::E>(left : list<registered_input<s,e>>, right : list<registered_input<s,e>>, warnings : list<string>) : <div> (list<registered_input<s,e>>, list<string>)
-  match right
-    Nil -> (left, warnings)
-    Cons(item, rest) ->
-      match find_input_in_list(left, registered_input/id(item))
-        Just(found) -> merge_registered_inputs(replace_registered_input(left, item), rest, Cons(if registered_input/semantic_name(found) == registered_input/semantic_name(item) then duplicate_listener_warning(registered_input/id(item), registered_input/semantic_name(item)) else semantic_drift_warning(registered_input/id(item), registered_input/semantic_name(found), registered_input/semantic_name(item)), warnings))
-        Nothing -> merge_registered_inputs(append_registered_input(left, item), rest, warnings)
-
-pub fun append_event_registries<s,e::E>(left : event_registry<s,e>, right : event_registry<s,e>) : <div> event_registry<s,e>
-  match left
-    Event_registry(left_clicks, left_inputs, left_warnings) ->
-      match right
-        Event_registry(right_clicks, right_inputs, right_warnings) -> {
-          val (merged_clicks, click_warnings) = merge_registered_clicks(left_clicks, right_clicks, append_messages(left_warnings, right_warnings))
-          val (merged_inputs, merged_warnings) = merge_registered_inputs(left_inputs, right_inputs, click_warnings)
-          Event_registry(merged_clicks, merged_inputs, merged_warnings)
-        }
-
-fun append_registered_clicks<s,e::E>(left : list<registered_click<s,e>>, right : list<registered_click<s,e>>) : <div> list<registered_click<s,e>>
-  match left
-    Nil -> right
-    Cons(head, rest) -> Cons(head, append_registered_clicks(rest, right))
-
-fun append_registered_inputs<s,e::E>(left : list<registered_input<s,e>>, right : list<registered_input<s,e>>) : <div> list<registered_input<s,e>>
-  match left
-    Nil -> right
-    Cons(head, rest) -> Cons(head, append_registered_inputs(rest, right))
 
 pub fun find_registered_click<s,e::E>(registry : event_registry<s,e>, target_id : string) : <div> maybe<registered_click<s,e>>
   find_click_in_list(event_registry/clicks(registry), target_id)
@@ -284,45 +254,55 @@ fun state_value(tree : list<state_entry>, entry_slot : state_slot, fallback : a,
 fun assoc_slot_value(tree : list<state_entry>, entry_slot : state_slot, value : a, ?state_codec : state_codec<a>) : <div> list<state_entry>
   assoc_entry(tree, state_codec_write(state_codec, state_slot/path(entry_slot), value))
 
-fun clear_slot_state(tree : list<state_entry>, entry_slot : state_slot) : <div> list<state_entry>
-  clear_state(tree, state_slot/path(entry_slot))
-
-fun set_slot_state(entry_slot : state_slot, value : a, ?state_codec : state_codec<a>) : <local_state_write,div> ()
-  set_named_state(entry_slot, state_codec, value)
-
 fun use_named_state_pair(entry_slot : state_slot, fallback : a, ?state_codec : state_codec<a>) : <local_state_read,div> (a, (a) -> <local_state_write,div> ())
   (use_named_state(entry_slot, state_codec, fallback), fn(value) set_named_state(entry_slot, state_codec, value))
 
-// React-like hook helpers: `component(...)` declares one stable scope per component,
+// React-like hook helpers: `component(...)` declares one stable keyed child,
 // and plain `use_state(...)` / `use_effect(...)` then consume numbered slots automatically.
-// When you need an explicit path, use the `use_named_*` variants instead.
+// Raw scope-path handling remains private to the framework.
 
-pub fun with_hook_scope(scope_name : string, action : () -> <hook_scope|e> a) : <hook_scope|e> a
+fun with_hook_scope(scope_name : string, action : () -> <hook_scope|e> a) : <hook_scope|e> a
   push_hook_scope(scope_name)
   val result = action()
   pop_hook_scope()
   result
 
-pub fun component(scope_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
+fun component_at(scope_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
   with_hook_scope(scope_name, render)
 
-// Use this for root-owned keyed components so business code does not have to spell
-// `component(component_local_path(...), ...)` just to declare one stable component boundary.
-pub fun component_root(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component(component_local_path(group, key), render)
+// A feature root has absolute identity, so its state can survive layout moves,
+// temporary unmounts, and hot replacement. Public feature components should
+// expose their key when more than one instance can appear in the same tree.
+pub fun feature_root(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
+  component_at(component_local_path(group, key), render)
 
-pub fun component_in(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component(child_scope(current_hook_scope_name(), group, key), render)
+// A feature's persistent runtime key and its sibling VDOM key serve different
+// jobs. Keep the historical singleton VDOM key for the default instance while
+// deriving a unique one for additional instances.
+pub fun feature_node_key(group : string, key : string, default_key : string = "panel") : string
+  val group_name = normalize_slot_name(group)
+  if key == default_key then group_name else group_name ++ ":" ++ normalize_slot_name(key)
+
+// DOM effects query by marker, so repeated feature instances need the same key
+// discipline as stores and listeners. The default instance keeps legacy marker
+// names to preserve browser behavior and existing snapshots/tests.
+pub fun feature_dom_marker(group : string, key : string, name : string, default_key : string = "panel") : string
+  val marker_name = normalize_slot_name(name)
+  if key == default_key then marker_name else feature_node_key(group, key, default_key) ++ ":" ++ marker_name
+
+// A normal keyed child component is relative to its current parent scope.
+pub fun component(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
+  component_at(child_scope(current_hook_scope_name(), group, key), render)
 
 // Render a keyed collection of child components without exposing scope-path
-// construction or repeating a one-line `map(... component_in(...))` helper.
+// construction or repeating a one-line `map(... component(...))` helper.
 pub fun components<a,e>(
   items : list<a>,
   group : string,
   key : (a) -> string,
   render : (a) -> <hook_scope|e> vnode
 ) : <hook_scope|e> list<vnode>
-  map(items, fn(item) component_in(group, key(item)) { render(item) })
+  map(items, fn(item) component(group, key(item)) { render(item) })
 
 pub fun component_local_path(group_name : string, key_name : string) : string
   component_child_path("", group_name, key_name)
@@ -393,23 +373,11 @@ pub fun read_named_local_state<a>(tree : list<state_entry>, scope_name : string,
 pub fun assoc_named_local_state<a>(tree : list<state_entry>, scope_name : string, state_name : string, value : a, ?state_codec : state_codec<a>) : <div> list<state_entry>
   assoc_slot_value(tree, hook_named_state_slot(scope_name, state_name), value)
 
-pub fun set_named_local_state<a>(scope_name : string, state_name : string, value : a, ?state_codec : state_codec<a>) : <local_state_write,div> ()
-  set_slot_state(hook_named_state_slot(scope_name, state_name), value)
-
-pub fun clear_named_local_state(scope_name : string, state_name : string) : <local_state_write,div> ()
+fun clear_named_local_state(scope_name : string, state_name : string) : <local_state_write,div> ()
   clear_slot(hook_named_state_slot(scope_name, state_name))
-
-pub fun clear_named_local_state_in_tree(tree : list<state_entry>, scope_name : string, state_name : string) : <div> list<state_entry>
-  clear_slot_state(tree, hook_named_state_slot(scope_name, state_name))
-
-pub fun root_listener_path(kind : dom_event_kind, name : string) : string
-  state_slot/path(named_listener_slot("", kind, name))
 
 pub fun component_listener_path(group_name : string, key_name : string, kind : dom_event_kind, name : string) : string
   state_slot/path(named_listener_slot(component_local_path(group_name, key_name), kind, name))
-
-pub fun root_effect_path(name : string) : string
-  state_slot/path(hook_named_effect_slot("", name))
 
 pub fun component_effect_path(group_name : string, key_name : string, name : string) : string
   state_slot/path(hook_named_effect_slot(component_local_path(group_name, key_name), name))
@@ -546,16 +514,16 @@ pub fun run_component<s,e::E,a>(
   render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> a
 ) : <component_runtime,div> (s, a, list<scheduled_effect>, event_registry<s,e>)
   run_stateful_component(owner) fn(current)
-    component_root(group, key) { render(current) }
+    feature_root(group, key) { render(current) }
 
 pub fun read_local_state(tree : list<state_entry>, action : () -> <local_state_read,div|e> a) : <div|e> a
   with fun use_named_state(entry_slot, codec, fallback) state_value(tree, entry_slot, fallback, codec)
   action()
 
-pub fun current_component_state_entries() : <component_runtime,div> list<state_entry>
+fun current_component_state_entries() : <component_runtime,div> list<state_entry>
   get_component_state_entries()
 
-pub fun replace_component_state_entries(tree : list<state_entry>) : <component_runtime,div> ()
+fun replace_component_state_entries(tree : list<state_entry>) : <component_runtime,div> ()
   set_component_state_entries(tree)
 
 fun clear_slot(entry_slot : state_slot) : <local_state_write,div> ()
@@ -604,7 +572,7 @@ fun chars_have_prefix(text : list<char>, prefix_chars : list<char>) : bool
 fun path_in_branch(path : string, branch_path : string) : bool
   path == branch_path || chars_have_prefix(list(path), list(branch_path ++ "/"))
 
-pub fun clear_state_branch(tree : list<state_entry>, branch_path : string) : <div> list<state_entry>
+fun clear_state_branch(tree : list<state_entry>, branch_path : string) : <div> list<state_entry>
   match tree
     Nil -> Nil
     Cons(item, rest) ->
@@ -613,30 +581,15 @@ pub fun clear_state_branch(tree : list<state_entry>, branch_path : string) : <di
       else
         Cons(item, clear_state_branch(rest, branch_path))
 
+// Reset a persistent feature instance without exposing runtime tree paths to
+// business lifecycle code.
+pub fun reset_feature(group : string, key : string) : <component_runtime,div> ()
+  replace_component_state_entries(clear_state_branch(current_component_state_entries(), component_local_path(group, key)))
+
 fun append_scheduled_effect(items : list<scheduled_effect>, item : scheduled_effect) : <div> list<scheduled_effect>
   match items
     Nil -> [item]
     Cons(head, rest) -> Cons(head, append_scheduled_effect(rest, item))
-
-pub fun append_scheduled_effects(left : list<scheduled_effect>, right : list<scheduled_effect>) : <div> list<scheduled_effect>
-  match left
-    Nil -> right
-    Cons(head, rest) -> Cons(head, append_scheduled_effects(rest, right))
-
-pub fun compose_component_runs<s,e::E,a,b>(
-  left : (s, a, list<scheduled_effect>, event_registry<s,e>),
-  right : (s) -> <div> (s, b, list<scheduled_effect>, event_registry<s,e>)
-) : <div> (s, (a, b), list<scheduled_effect>, event_registry<s,e>)
-  val (next_owner, left_result, left_effects, left_handlers) = left
-  val (final_owner, right_result, right_effects, right_handlers) = right(next_owner)
-  (final_owner, (left_result, right_result), append_scheduled_effects(left_effects, right_effects), append_event_registries(left_handlers, right_handlers))
-
-pub fun map_component_run<s,e::E,a,b,f::E>(
-  item : (s, a, list<scheduled_effect>, event_registry<s,e>),
-  transform : (s, a) -> <div|f> b
-) : <div|f> (s, b, list<scheduled_effect>, event_registry<s,e>)
-  val (owner, result, effects, handlers) = item
-  (owner, transform(owner, result), effects, handlers)
 
 fun effect_signature(deps : list<string>) : <div> string
   match deps

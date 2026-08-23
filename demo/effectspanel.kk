@@ -7,8 +7,6 @@ import demo/shared
 import explore/react/core
 import explore/react/state
 
-alias effects_view_effect = <hook_scope,listener_registry<model,browser_event_effect>,div>
-
 fun tiny_task_list(key : string, tasks : list<task>) : <div> vnode
   if is-empty(tasks) then p("None", class = "empty") else ul(map(tasks, fn(item) li_text(item.title, key = "tiny-" ++ task/id(item).show)), key = key, class = "tiny-list")
 
@@ -41,12 +39,12 @@ fun core_effect_cases(item : model) : <div> list<vnode>
     ], class = "preview-grid")),
   ]
 
-fun route_effect_cases(item : model, results : list<test_result>) : effects_view_effect list<vnode>
+fun route_effect_cases(item : model, results : list<test_result>) : app_view list<vnode>
   if item.route_name == "effects-dialogs" then
     [effect_case(
       "Dialog overlays",
       "Inspired by the MoonBit and Rust explore-react demos: trigger controlled alert, prompt, dialog, and drawer surfaces without leaving the app tree.",
-      component_in(group = "dialogs", key = "demo", render = fn() dialog_demo_case(item)))]
+      component("dialogs", "demo") { dialog_demo_case(item) })]
   else if item.route_name == "effects-workflow" then
     [effect_case("Workflow lab", "The richer demo composes `wait_ms`, mocked server fetch/send, and an ambient operator identity into one deterministic workflow.", case_detail("Workflow sync captures waits", "workflow-empty", "workflow-detail", "Workflow case unavailable.", results))]
   else if item.route_name == "effects-state" then
@@ -63,15 +61,10 @@ fun effects_panel_note(route_name : string) : string
   else if route_name == "effects-timer" then "Timer behavior stays deterministic because tests intercept `wait_ms` instead of waiting on wall-clock time."
   else "This route now shows the smaller effect cases that explain the core mechanics before the richer workflow and dialog demos branch off into their own subroutes."
 
-fun effects_panel(item : model, results : list<test_result>) : effects_view_effect vnode
-  val cases = route_effect_cases(item, results)
-  panel([
-    div(cases, class = "case-grid"),
-  ], title = "Effects", note = effects_panel_note(item.route_name), key = "effects", class_name = "effects-panel")
-
-pub fun run_effects_panel(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_component(
-    item,
-    group = "effects",
-    key = "panel",
-    render = fn(owner) effects_panel(owner, results))
+pub fun effects_panel(item : model, results : list<test_result>, key : string = "panel") : app_view vnode
+  feature_root("effects", key) {
+    val cases = route_effect_cases(item, results)
+    panel([
+      div(cases, class = "case-grid"),
+    ], title = "Effects", note = effects_panel_note(item.route_name), key = feature_node_key(group = "effects", key = key), class_name = "effects-panel")
+  }
