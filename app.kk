@@ -11,5 +11,11 @@ pub fun dispatch_input_bridge(channel : string, value : string) : _e ()
 pub fun dispatch_route_bridge(route_name : string) : _e ()
   browserapp/dispatch_route_bridge(route_name)
 
+pub fun export_state_snapshot_bridge() : _e string
+  browserapp/export_state_snapshot_bridge()
+
+pub fun boot_with_snapshot(root_id : string, snapshot : string) : _e ()
+  browserapp/boot_with_snapshot(root_id, snapshot)
+
 pub fun boot(root_id : string) : _e ()
   browserapp/boot(root_id)

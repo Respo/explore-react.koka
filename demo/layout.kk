@@ -12,35 +12,35 @@ import explore/react/core
 import explore/react/state
 
 fun intro_panel(item : model) : <div> vnode
-  header(props(class = "panel intro-panel"), [
-    div(props(class = "intro-top"), [
-      h1(props(class = "page-title"), "explore-react core + dense debug demo"),
-      span(props(class = "route-indicator"), "route: #" ++ item.route_name),
-    ]),
-    p(props(class = "section-note"), "`explore/react/*` holds VDOM helpers; `demo/*` now exposes finer subroutes so search, bridge, dialogs, workflow, and timing demos are easier to inspect in isolation."),
-  ])
+  header([
+    div([
+      h1("explore-react core + dense debug demo", class = "page-title"),
+      span("route: #" ++ item.route_name, class = "route-indicator"),
+    ], class = "intro-top"),
+    p("`explore/react/*` holds VDOM helpers; `demo/*` now exposes finer subroutes so search, bridge, dialogs, workflow, and timing demos are easier to inspect in isolation.", class = "section-note"),
+  ], class = "panel intro-panel")
 
 fun wrap_single_stage(node : vnode) : vnode
-  div(props(class = "single-stage"), [node])
+  div([node], class = "single-stage")
 
 fun overview_stage(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
   val (todo_item, next_runtime_tree, todo_node, todo_effects, todo_handlers) = run_todo_panel(item, runtime_tree)
   val (lab_item, next_runtime_tree2, lab_node, lab_effects, lab_handlers) = run_lab_panel(todo_item, next_runtime_tree)
   val (effects_item, effects_node, effects, handlers) = run_effects_panel(lab_item, results)
-  (effects_item, next_runtime_tree2, div(props(class = "overview-grid"), [
-    div(props(class = "overview-main"), [
+  (effects_item, next_runtime_tree2, div([
+    div([
       todo_node,
-    ]),
-    aside(props(class = "overview-side"), [
+    ], class = "overview-main"),
+    aside([
       tests_panel(results),
-    ]),
-    div(props(class = "overview-wide"), [
+    ], class = "overview-side"),
+    div([
       lab_node,
-    ]),
-    div(props(class = "overview-wide"), [
+    ], class = "overview-wide"),
+    div([
       effects_node,
-    ]),
-  ]), append_scheduled_effects(append_scheduled_effects(todo_effects, lab_effects), effects), append_event_registries(append_event_registries(todo_handlers, lab_handlers), handlers))
+    ], class = "overview-wide"),
+  ], class = "overview-grid"), append_scheduled_effects(append_scheduled_effects(todo_effects, lab_effects), effects), append_event_registries(append_event_registries(todo_handlers, lab_handlers), handlers))
 
 fun route_stage(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
   if item.route_name == "todo" then
@@ -60,8 +60,8 @@ fun route_stage(item : model, runtime_tree : list<state_entry>, results : list<t
 
 pub fun render_layout(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <hook_scope,listener_registry<model,browser_event_effect>,div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
   val stage_run = route_stage(item, runtime_tree, results)
-  map_component_tree_run(stage_run, fn(owner, current_stage) section_key("app", props(class = "shell app-shell"), [
+  map_component_tree_run(stage_run, fn(owner, current_stage) section([
     intro_panel(owner),
     route_bar(owner),
     current_stage,
-  ]))
+  ], key = "app", class = "shell app-shell"))

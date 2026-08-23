@@ -9,23 +9,23 @@ alias route_bar_effect = <hook_scope,listener_registry<model,browser_event_effec
 
 fun route_button(label : string, route_name : string, active : bool) : route_bar_effect vnode
   val class_name = if active then "button route-tab route-tab-active" else "button route-tab"
-  button(props(class = class_name), on(click = on_local_click("nav-" ++ route_name, fn(owner : model) owner(route_name = normalize_route(route_name)))), label)
+  button(label, class = class_name, click = on_local_click("nav-" ++ route_name, fn(owner : model) owner(route_name = normalize_route(route_name))))
 
 fun lab_subroutes(active_route : string) : route_bar_effect vnode
-  div(props(class = "route-bar route-sub-bar"), [
+  div([
     route_button("Board", "lab-board", active_route == "lab-board"),
     route_button("Search", "lab-search", active_route == "lab-search"),
     route_button("Bridge", "lab-bridge", active_route == "lab-bridge"),
-  ])
+  ], class = "route-bar route-sub-bar")
 
 fun effects_subroutes(active_route : string) : route_bar_effect vnode
-  div(props(class = "route-bar route-sub-bar"), [
+  div([
     route_button("Core", "effects-core", active_route == "effects-core"),
     route_button("Dialogs", "effects-dialogs", active_route == "effects-dialogs"),
     route_button("Workflow", "effects-workflow", active_route == "effects-workflow"),
     route_button("State", "effects-state", active_route == "effects-state"),
     route_button("Timer", "effects-timer", active_route == "effects-timer"),
-  ])
+  ], class = "route-bar route-sub-bar")
 
 pub fun route_bar(item : model) : route_bar_effect vnode
   val active_route = item.route_name
@@ -33,14 +33,14 @@ pub fun route_bar(item : model) : route_bar_effect vnode
   val secondary_bar =
     if active_section == "lab" then lab_subroutes(active_route)
     else if active_section == "effects" then effects_subroutes(active_route)
-    else div(props(class = "route-sub-bar route-sub-bar-empty"), Nil)
-  nav_key("route-bar", props(class = "panel route-panel"), [
-    div(props(class = "route-bar"), [
+    else div(Nil, class = "route-sub-bar route-sub-bar-empty")
+  nav([
+    div([
       route_button("Overview", "overview", active_section == "overview"),
       route_button("Todo", "todo", active_section == "todo"),
       route_button("Lab", "lab", active_section == "lab"),
       route_button("Effects", "effects", active_section == "effects"),
       route_button("Checks", "checks", active_section == "checks"),
-    ]),
+    ], class = "route-bar"),
     secondary_bar,
-  ])
+  ], key = "route-bar", class = "panel route-panel")

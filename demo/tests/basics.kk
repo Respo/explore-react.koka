@@ -21,7 +21,7 @@ fun timer_logic() : <browser_host> string
   "timer-ready"
 
 pub fun component_render_test() : <div> test_result
-  val html = render_node("0", button(props(class = "demo-button"), on(click = click_listener("run-sample")), "Run"))
+  val html = render_node("0", button("Run", class = "demo-button", click = click_listener("run-sample")))
   val expected = "<button data-kpath=\"0\" class=\"demo-button\" data-k-click=\"run-sample\">Run</button>"
   Test_result("Component render snapshot", if html == expected then "Stable HTML output for a small component." else html, html == expected)
 

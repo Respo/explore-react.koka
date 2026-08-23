@@ -95,12 +95,16 @@ pub fun dispatch_route_bridge(route_name : string) : _e ()
   val frame = !frame_ref
   commit(current_runtime_frame(runtime_frame/owner(frame)(route_name = normalize_route(route_name)), runtime_frame/runtime_tree(frame)))
 
-pub fun boot(root_id : string) : _e ()
+pub fun export_state_snapshot_bridge() : _e string
+  encode_state_snapshot(runtime_frame/runtime_tree(!frame_ref))
+
+pub fun boot_with_snapshot(root_id : string, snapshot : string) : _e ()
   root_id_ref := root_id
   set_root_id(root_id)
   attach_events(root_id)
   val start_model = initial_model()(route_name = normalize_route(browser_hash()))
-  val (next_model, next_runtime_tree, tree, pending_effects, handlers) = render_app_with_runtime(Nothing, start_model, Nil, demo_test_results())
+  val restored_runtime_tree = decode_state_snapshot(snapshot)
+  val (next_model, next_runtime_tree, tree, pending_effects, handlers) = render_app_with_runtime(Nothing, start_model, restored_runtime_tree, demo_test_results())
   frame_ref := current_runtime_frame(next_model, next_runtime_tree)
   tree_ref := tree
   handlers_ref := handlers
@@ -108,3 +112,6 @@ pub fun boot(root_id : string) : _e ()
   browser_set_hash(next_model.route_name)
   log_registry_warnings(event_registry/warnings(handlers))
   run_pending_effects(pending_effects)
+
+pub fun boot(root_id : string) : _e ()
+  boot_with_snapshot(root_id, "")
