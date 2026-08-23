@@ -32,7 +32,7 @@ pub effect listener_registry<s,e::E>
 
 pub type listener_registration<s,e::E>
   Click_registration(semantic_name : string, run : (s) -> <div|e> s)
-  Input_registration(semantic_name : string, run : (string, s) -> <div> s)
+  Input_registration(semantic_name : string, run : (string, s) -> <local_state_read,local_state_write,div> s)
   Enter_registration(semantic_name : string, run : (s) -> <div|e> s)
 
 pub struct state_slot(path : string)
@@ -58,7 +58,7 @@ inline extern snapshot_unescape(text : string) : string
 
 pub struct scheduled_effect(path : string, run : () -> io ())
 pub struct registered_click<s,e::E>(id : string, semantic_name : string, run : (s) -> <div|e> s)
-pub struct registered_input<s>(id : string, semantic_name : string, run : (string, s) -> <div> s)
+pub struct registered_input<s>(id : string, semantic_name : string, run : (string, s) -> <local_state_read,local_state_write,div> s)
 pub struct event_registry<s,e::E>(clicks : list<registered_click<s,e>>, inputs : list<registered_input<s>>, warnings : list<string>)
 struct hook_frame(scope_name : string, next_state_index : int, next_effect_index : int)
 
@@ -124,7 +124,7 @@ pub val bool/state_codec : state_codec<bool> = State_codec(
 pub fun run_registered_click<s,e::E>(item : registered_click<s,e>, owner : s) : <div|e> s
   item.run.(owner)
 
-pub fun run_registered_input<s>(item : registered_input<s>, value : string, owner : s) : <div> s
+pub fun run_registered_input<s>(item : registered_input<s>, value : string, owner : s) : <local_state_read,local_state_write,div> s
   item.run.(value, owner)
 
 pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
@@ -311,6 +311,16 @@ pub fun component_root(group_name : string, key_name : string, render : () -> <h
 pub fun component_in(group_name : string, key_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
   component(child_scope(current_hook_scope_name(), group_name, key_name), render)
 
+// Render a keyed collection of child components without exposing scope-path
+// construction or repeating a one-line `map(... component_in(...))` helper.
+pub fun components<a,e>(
+  items : list<a>,
+  group : string,
+  key : (a) -> string,
+  render : (a) -> <hook_scope|e> vnode
+) : <hook_scope|e> list<vnode>
+  map(items, fn(item) component_in(group, key(item), fn() render(item)))
+
 pub fun component_local_path(group_name : string, key_name : string) : string
   component_child_path("", group_name, key_name)
 
@@ -336,6 +346,14 @@ pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_
   val codec = spec.state_codec
   val current = use_named_state(entry_slot, codec, initial)
   Store_binding(current, fn(action) update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action)))
+
+// Store access outside a component render still speaks in typed state/actions.
+// Scope and serialization stay inside the framework boundary.
+pub fun current_store_state<s,a>(scope : string, spec : store_spec<s,a>, initial : s) : <local_state_read,div> s
+  use_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial)
+
+pub fun dispatch_store<s,a>(scope : string, spec : store_spec<s,a>, initial : s, action : a) : <local_state_write,div> ()
+  update_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial, fn(latest) spec.reduce.(latest, action))
 
 pub fun encode_store_action<s,a>(target : string, spec : store_spec<s,a>, action : a) : state_action
   val codec = spec.action_codec
@@ -405,11 +423,25 @@ pub fun on_scoped_click<s,e::E>(scope_base : string, listener_name : string, sem
 pub fun on_local_click<s,e::E>(name : string, action : (s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Click_event, name), Click_registration(name, action))
 
-pub fun on_local_input<s,e::E>(name : string, action : (string, s) -> <div> s) : <hook_scope,listener_registry<s,e>,div> listener
+pub fun on_local_input<s,e::E>(name : string, action : (string, s) -> <local_state_read,local_state_write,div> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Input_event, name), Input_registration(name, action))
 
 pub fun on_local_enter<s,e::E>(name : string, action : (s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   register_listener(named_listener_slot(current_hook_scope_name(), Enter_event, name), Enter_registration(name, action))
+
+// Common reducer-backed controls only emit a typed component action and leave
+// the owner unchanged. These helpers keep that event plumbing out of views.
+pub fun on_store_click<s,t,a,e::E>(name : string, binding : store_binding<t,a>, action : a) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
+  on_local_click(name, fn(owner) {
+    binding.send.(action)
+    owner
+  })
+
+pub fun on_store_input<s,t,a,e::E>(name : string, binding : store_binding<t,a>, action : (string) -> a) : <hook_scope,listener_registry<s,e>,div> listener
+  on_local_input(name, fn(value, owner) {
+    binding.send.(action(value))
+    owner
+  })
 
 fun replace_registered_click<s,e::E>(items : list<registered_click<s,e>>, next_item : registered_click<s,e>) : <div> list<registered_click<s,e>>
   match items
@@ -683,6 +715,22 @@ pub fun decode_state_snapshot(snapshot : string) : list<state_entry>
 
 fun require_hook_scope(scope_name : string, kind : string) : string
   scope_name
+
+// Event callbacks only need to read and update the already-created runtime
+// tree. Handling this at the runtime boundary keeps tree plumbing out of
+// component callbacks and out of the business model.
+pub fun run_local_action(tree : list<state_entry>, action : () -> <local_state_read,local_state_write,div|e> a) : <div|e> (a, list<state_entry>)
+  var next_tree := tree
+  with return(result) (result, next_tree)
+  with fun use_named_state(entry_slot, codec, fallback) state_value(next_tree, entry_slot, fallback, codec)
+  with handler
+    fun set_named_state(entry_slot, codec, value) next_tree := assoc_slot_value(next_tree, entry_slot, value, codec)
+    fun update_named_state(entry_slot, codec, fallback, update) {
+      val current = state_value(next_tree, entry_slot, fallback, codec)
+      next_tree := assoc_slot_value(next_tree, entry_slot, update(current), codec)
+    }
+    fun clear_local_state(path) next_tree := clear_state(next_tree, path)
+  action()
 
 pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,div|e> a) : <div|e> (a, list<state_entry>, list<scheduled_effect>)
   var next_tree := tree

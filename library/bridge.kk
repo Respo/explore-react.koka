@@ -160,9 +160,6 @@ fun bridge_case_button(item : bridge_case, requested_case : string, visible_case
 pub fun render_bridge_case_buttons(items : list<bridge_case>, requested_case : string, visible_case : string, dispatch_case : string -> listener) : <div> list<vnode>
   map(items, fn(item) bridge_case_button(item, requested_case, visible_case, dispatch_case))
 
-fun render_bridge_detail_lines(lines : list<string>) : <div> list<vnode>
-  map-indexed(lines, fn(index, line) li_text(line, key = "bridge-detail-" ++ index.show, class = "activity-item"))
-
 fun bridge_transition_banner(requested_case : string, visible_case : string) : vnode
   div([
     div([
@@ -182,7 +179,7 @@ fun bridge_detail_node(case_item : bridge_case, detail_status : string) : <div> 
     div([
       strong(bridge_case/detail_title(case_item), class = "section-title"),
       p("Nested boundary resolved after the outer shell became visible.", class = "case-detail"),
-      ul(render_bridge_detail_lines(bridge_case/detail_lines(case_item)), class = "activity-list"),
+      ul(map-indexed(bridge_case/detail_lines(case_item), fn(index, line) li_text(line, key = "bridge-detail-" ++ index.show, class = "activity-item")), class = "activity-list"),
     ], class = "bridge-detail-card")
   else
     render_bridge_fallback("bridge-detail-fallback", "Nested fallback", "Shell is visible, but the diagnostic trace is still suspended through the browser callback bridge.", "bridge-detail-fallback")

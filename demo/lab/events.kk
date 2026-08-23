@@ -8,6 +8,7 @@ import library/bridge
 import library/maybe
 import library/search
 import explore/react/core
+import explore/react/state
 
 pub type lab_action
   Load_board
@@ -41,7 +42,7 @@ fun incident_id_from_toggle(payload : string, items : list<incident>) : <div> ma
 fun incident_id_from_send(payload : string, items : list<incident>) : <div> maybe<int>
   find(items, fn(item) payload == "lab-send-" ++ incident/id(item).show).map(incident/id)
 
-pub fun dispatch_lab_action(action : lab_action, owner : model) : <lab_action_effect,div> model
+pub fun dispatch_lab_action(action : lab_action, owner : model) : <lab_action_effect,local_state_read,local_state_write,div> model
   match action
     Load_board -> load_snapshot(owner)
     Run_sync -> perform_sync(owner)
@@ -62,17 +63,23 @@ fun decode_lab_action(payload : string, owner : model) : <div> maybe<lab_action>
     decode_search_pick_payload(payload).map(Search_for) ||
     incident_id_from_send(payload, owner.lab.incidents).map(Send_reply)
 
-pub fun route_lab_click(payload : string, owner : model) : <lab_action_effect,div> maybe<model>
+pub fun route_lab_click(payload : string, owner : model) : <lab_action_effect,local_state_read,local_state_write,div> maybe<model>
   decode_lab_action(payload, owner).map(fn(action) dispatch_lab_action(action, owner)).or-else {
     resolve_search_result(owner, payload).or-else {
       resolve_bridge_result(owner, payload).or-else {
-        incident_id_from_toggle(payload, owner.lab.incidents).map(fn(target_id) commit_lab_tree(owner, fn() toggle_local_lab_expanded(owner, target_id)))
+        incident_id_from_toggle(payload, owner.lab.incidents).map(fn(target_id) {
+          dispatch_incident_local_action(target_id, Toggle_incident)
+          owner
+        })
       }
     }
   }
 
-pub fun route_lab_input(channel : string, value : string, owner : model) : <bridge_request_effect,div> maybe<model>
+pub fun route_lab_input(channel : string, value : string, owner : model) : <bridge_request_effect,local_state_write,div> maybe<model>
   if channel == search_query_channel() then
     Just(set_search_query(owner, value))
   else
-    find_lab_draft_channel(channel, owner.lab.incidents).map(fn(target_id) commit_lab_tree(owner, fn() set_local_lab_draft(owner, target_id, value)))
+    find_lab_draft_channel(channel, owner.lab.incidents).map(fn(target_id) {
+      dispatch_incident_local_action(target_id, Change_incident_draft(value))
+      owner
+    })

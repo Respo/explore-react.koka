@@ -38,6 +38,5 @@ pub fun initial_model() : model
     "all",
     "Ready: Koka owns components, state, and diff/patch.",
     "overview",
-    Nil,
     initial_lab(),
     initial_dialog_demo("No overlay interaction yet."))

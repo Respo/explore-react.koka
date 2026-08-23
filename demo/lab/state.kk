@@ -1,13 +1,48 @@
 module demo/lab/state
 
-import demo/model
-import demo/runtimeowner
 import explore/react/state
 
 pub struct incident_local_state(expanded : bool, draft : string)
-pub alias lab_local_effect = <local_state_write,hook_state,hook_effects,div>
+pub type incident_local_action
+  Toggle_incident
+  Change_incident_draft(value : string)
+  Finish_incident_reply
 
-pub fun lab_panel_scope_path() : string
+fun update_incident_local_state(current : incident_local_state, action : incident_local_action) : incident_local_state
+  match action
+    Toggle_incident -> current(expanded = not(current.expanded))
+    Change_incident_draft(value) -> current(draft = value)
+    Finish_incident_reply -> current(expanded = True, draft = "")
+
+fun encode_incident_local_state(current : incident_local_state) : string
+  (if current.expanded then "1" else "0") ++ current.draft
+
+fun decode_incident_local_state(version : int, payload : string) : maybe<incident_local_state>
+  if version != 1 then Nothing
+  else if payload.head == "1" then Just(Incident_local_state(True, payload.tail))
+  else if payload.head == "0" then Just(Incident_local_state(False, payload.tail))
+  else Nothing
+
+fun encode_incident_local_action(action : incident_local_action) : string
+  match action
+    Toggle_incident -> "t"
+    Change_incident_draft(value) -> "d" ++ value
+    Finish_incident_reply -> "f"
+
+fun decode_incident_local_action(version : int, payload : string) : maybe<incident_local_action>
+  if version != 1 then Nothing
+  else if payload == "t" then Just(Toggle_incident)
+  else if payload == "f" then Just(Finish_incident_reply)
+  else if payload.head == "d" then Just(Change_incident_draft(payload.tail))
+  else Nothing
+
+pub val incident_local_store : store_spec<incident_local_state,incident_local_action> = Store_spec(
+  "incident",
+  State_codec("lab/incident-local", 1, decode_incident_local_state, encode_incident_local_state),
+  Action_codec("lab/incident-local-action", 1, decode_incident_local_action, encode_incident_local_action),
+  update_incident_local_state)
+
+fun lab_panel_scope_path() : string
   component_local_path("lab", "panel")
 
 fun incident_component_key(incident_id : int) : string
@@ -17,27 +52,13 @@ fun incident_scope_path(incident_id : int) : string
   component_child_path(lab_panel_scope_path(), "incidents", incident_component_key(incident_id))
 
 pub fun lab_incident_expanded(tree : list<state_entry>, incident_id : int) : <div> bool
-  read_named_local_state(tree, incident_scope_path(incident_id), "expanded", False)
+  read_store_state(tree, incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, "")).expanded
 
 pub fun lab_incident_draft(tree : list<state_entry>, incident_id : int) : <div> string
-  read_named_local_state(tree, incident_scope_path(incident_id), "draft", "")
+  read_store_state(tree, incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, "")).draft
 
-pub fun finalize_incident_reply_tree(tree : list<state_entry>, incident_id : int) : <div> list<state_entry>
-  clear_named_local_state_in_tree(
-    assoc_named_local_state(tree, incident_scope_path(incident_id), "expanded", True),
-    incident_scope_path(incident_id),
-    "draft")
+pub fun current_incident_local_state(incident_id : int) : <local_state_read,div> incident_local_state
+  current_store_state(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""))
 
-pub fun commit_lab_tree(owner : model, action : () -> <lab_local_effect,local_state_read,hook_scope|e> model) : <div|e> model
-  runtimeowner/run_attached_local_state(owner, action)
-
-pub fun set_local_lab_draft(owner : model, incident_id : int, draft : string) : <lab_local_effect> model
-  if draft == "" then
-    clear_named_local_state(incident_scope_path(incident_id), "draft")
-  else
-    set_named_local_state(incident_scope_path(incident_id), "draft", draft)
-  owner
-
-pub fun toggle_local_lab_expanded(owner : model, incident_id : int) : <lab_local_effect> model
-  set_named_local_state(incident_scope_path(incident_id), "expanded", not(lab_incident_expanded(runtimeowner/attached_runtime_tree(owner), incident_id)))
-  owner
+pub fun dispatch_incident_local_action(incident_id : int, action : incident_local_action) : <local_state_write,div> ()
+  dispatch_store(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""), action)

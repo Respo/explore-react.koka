@@ -10,7 +10,7 @@ import library/search
 import explore/react/core
 import explore/react/state
 
-alias lab_view_effect = <hook_scope,local_state_read,lab_local_effect,listener_registry<model,browser_event_effect>>
+alias lab_view_effect = <hook_scope,local_state_read,listener_registry<model,browser_event_effect>,div>
 
 fun severity_class(item : incident) : string
   match item.severity
@@ -26,8 +26,8 @@ fun status_class(item : incident) : string
 
 fun incident_card(item : incident) : lab_view_effect vnode
   val iid = incident/id(item)
-  val (expanded, _set_expanded) = state_pair(name = "expanded", initial = False)
-  val (draft, _set_draft) = state_pair(name = "draft", initial = "")
+  val local = use_store(incident_local_store, initial = Incident_local_state(False, ""))
+  val Incident_local_state(expanded, draft) = local.current
   val toggle_label = if expanded then "Collapse" else "Expand"
   val preview_text = if draft == "" then "local draft: <empty>" else "local draft: " ++ draft
   val collapsed_text = if draft == "" then "Draft is local and still empty." else "Draft saved locally for this card."
@@ -51,27 +51,21 @@ fun incident_card(item : incident) : lab_view_effect vnode
       ], class = "incident-badges"),
     ], class = "incident-head"),
     div([
-      button(toggle_label, class = "button", click = on_local_click("toggle-expanded", fn(owner : model) commit_lab_tree(owner, fn() toggle_local_lab_expanded(owner, iid)))),
-      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_local_input("draft-input", fn(value, owner : model) commit_lab_tree(owner, fn() set_local_lab_draft(owner, iid, value))), enter = on_local_enter("send-reply", fn(owner : model) dispatch_lab_action(Send_reply(iid), owner)), placeholder = "Local reply draft, per card..."),
+      button(toggle_label, class = "button", click = on_store_click("toggle-expanded", local, Toggle_incident)),
+      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", local, Change_incident_draft), enter = on_local_enter("send-reply", fn(owner : model) dispatch_lab_action(Send_reply(iid), owner)), placeholder = "Local reply draft, per card..."),
       button("Send reply", class = "button button-primary", click = on_local_click("send-reply", fn(m : model) dispatch_lab_action(Send_reply(iid), m))),
     ], class = "incident-controls"),
     detail_node,
   ], key = "incident-" ++ iid.show, class = "incident-card")
 
-fun render_incident_cards(items : list<incident>) : lab_view_effect list<vnode>
-  map(items, fn(item) component_in("incidents", incident/id(item).show, fn() incident_card(item)))
-
 fun incident_grid(lab : workflow_lab) : lab_view_effect vnode
-  div(render_incident_cards(lab.incidents), class = "incident-grid")
-
-fun render_activity_items(lines : list<string>) : <div> list<vnode>
-  map-indexed(lines, fn(index, line) li_text(line, key = "activity-" ++ index.show, class = "activity-item"))
+  div(components(lab.incidents, group = "incidents", key = fn(item) incident/id(item).show, render = incident_card), class = "incident-grid")
 
 fun activity_panel(lab : workflow_lab) : <div> vnode
   aside([
     strong("Workflow activity"),
     p("Each sync or reply appends a line that can be asserted in tests.", class = "case-detail"),
-    ul(render_activity_items(lab.activity_log), class = "activity-list"),
+    ul(map-indexed(lab.activity_log, fn(index, line) li_text(line, key = "activity-" ++ index.show, class = "activity-item")), class = "activity-list"),
   ], class = "mini-panel activity-panel")
 
 fun lab_panel_note(route_name : string) : string

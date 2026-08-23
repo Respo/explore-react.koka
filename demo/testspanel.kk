@@ -13,11 +13,8 @@ fun test_item(item : test_result) : vnode
     p(detail, class = "case-detail"),
   ], key = name, class = class_name)
 
-fun render_test_items(results : list<test_result>) : <div> list<vnode>
-  map(results, test_item)
-
 pub fun tests_panel(results : list<test_result>) : <div> vnode
   val passed = length(filter(results, fn(item) test_result/passed(item)))
   panel([
-    ul(render_test_items(results), key = "test-results", class = "test-list"),
+    ul(map(results, test_item), key = "test-results", class = "test-list"),
   ], title = "Checks", note = passed.show ++ " / " ++ length(results).show ++ " pass in-process.", key = "tests", class_name = "tests-panel")

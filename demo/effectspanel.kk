@@ -9,20 +9,8 @@ import explore/react/state
 
 alias effects_view_effect = <hook_scope,listener_registry<model,browser_event_effect>,div>
 
-pub fun effects_panel_scope_path() : string
-  component_local_path("effects", "panel")
-
-fun effects_dialog_demo_scope_path() : string
-  component_child_path(effects_panel_scope_path(), "dialogs", "demo")
-
-pub fun effects_dialog_demo_listener_path(kind : dom_event_kind, name : string) : string
-  named_local_listener_path(effects_dialog_demo_scope_path(), kind, name)
-
-fun render_tiny_items(tasks : list<task>) : <div> list<vnode>
-  map(tasks, fn(item) li_text(item.title, key = "tiny-" ++ task/id(item).show))
-
 fun tiny_task_list(key : string, tasks : list<task>) : <div> vnode
-  if is-empty(tasks) then p("None", class = "empty") else ul(render_tiny_items(tasks), key = key, class = "tiny-list")
+  if is-empty(tasks) then p("None", class = "empty") else ul(map(tasks, fn(item) li_text(item.title, key = "tiny-" ++ task/id(item).show)), key = key, class = "tiny-list")
 
 fun effect_case(title : string, detail : string, body : vnode) : vnode
   article([
@@ -72,7 +60,7 @@ fun effects_panel_note(route_name : string) : string
   else if route_name == "effects-timer" then "Timer behavior stays deterministic because tests intercept `wait_ms` instead of waiting on wall-clock time."
   else "This route now shows the smaller effect cases that explain the core mechanics before the richer workflow and dialog demos branch off into their own subroutes."
 
-pub fun effects_panel(item : model, results : list<test_result>) : effects_view_effect vnode
+fun effects_panel(item : model, results : list<test_result>) : effects_view_effect vnode
   val cases = route_effect_cases(item, results)
   panel([
     div(cases, class = "case-grid"),

@@ -17,8 +17,8 @@ pub fun run_lab_panel(item : model, runtime_tree : list<state_entry>) : <div> (m
     runtime_tree,
     fn(owner) component_root("lab", "panel", fn() render_lab_panel(owner, runtime_tree)))
 
-pub fun handle_lab_click(payload : string, owner : model) : <lab_action_effect,div> maybe<model>
+pub fun handle_lab_click(payload : string, owner : model) : <lab_action_effect,local_state_read,local_state_write,div> maybe<model>
   route_lab_click(payload, owner)
 
-pub fun handle_lab_input(channel : string, value : string, owner : model) : <bridge_request_effect,div> maybe<model>
+pub fun handle_lab_input(channel : string, value : string, owner : model) : <bridge_request_effect,local_state_write,div> maybe<model>
   route_lab_input(channel, value, owner)

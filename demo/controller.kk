@@ -18,10 +18,10 @@ pub fun dispatch_click(payload : string, item : model) : <browser_event_effect,d
     reduce_click(payload, item)
   }
 
-fun resolve_input(channel : string, value : string, item : model) : <bridge_request_effect,div> maybe<model>
+fun resolve_input(channel : string, value : string, item : model) : <browser_event_effect,div> maybe<model>
   handle_lab_input(channel, value, item)
 
-pub fun dispatch_input(channel : string, value : string, item : model) : <bridge_request_effect,div> model
+pub fun dispatch_input(channel : string, value : string, item : model) : <browser_event_effect,div> model
   resolve_input(channel, value, item).unwrap-or-else {
     reduce_input(channel, value, item)
   }

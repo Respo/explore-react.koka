@@ -45,9 +45,6 @@ pub fun handle_dialog_click(payload : string, owner : model) : <browser_host,div
     Just(open_dialog_demo(owner, kind = Dialog_drawer, title = "Drawer demo", message = "This side sheet keeps the background visible while secondary actions happen in a dedicated panel.", notice = "Opened drawer overlay demo."))
   else Nothing
 
-fun render_log_items(lines : list<string>) : <div> list<vnode>
-  map-indexed(lines, fn(index, line) li_text(line, key = "dialog-log-" ++ index.show, class = "activity-item"))
-
 pub fun dialog_demo_case(owner : model) : dialog_demo_effect vnode
   val current = owner.dialog
   val open_alert = on_local_click("open-alert", fn(next_owner : model) open_dialog_demo(next_owner, kind = Dialog_alert, title = "Alert demo", message = "A controlled alert surface rendered inside the app tree, similar to the explore-react demos in the MoonBit and Rust implementations.", notice = "Opened alert overlay demo."))
@@ -69,7 +66,7 @@ pub fun dialog_demo_case(owner : model) : dialog_demo_effect vnode
       ], class = "mini-panel stack"),
       div([
         strong("Dialog activity"),
-        if is-empty(current.activity_log) then p("No overlay interactions yet.", class = "empty") else ul(render_log_items(current.activity_log), class = "activity-list dialog-log-list"),
+        if is-empty(current.activity_log) then p("No overlay interactions yet.", class = "empty") else ul(map-indexed(current.activity_log, fn(index, line) li_text(line, key = "dialog-log-" ++ index.show, class = "activity-item")), class = "activity-list dialog-log-list"),
       ], class = "mini-panel stack"),
     ], class = "preview-grid"),
   ], class = "stack")

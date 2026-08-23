@@ -3,7 +3,7 @@ module demo/tests/basics
 import library/bridge
 import library/route
 import demo/model
-import demo/runtimebridge
+import demo/runtimeframe
 import demo/seed
 import demo/tests/appharness
 import demo/tests/support
@@ -46,14 +46,13 @@ pub fun ambient_filter_test() : <div> test_result
   Test_result("Ambient filter previews", "active=" ++ active_count.show ++ ", done=" ++ done_count.show, active_count == 2 && done_count == 1)
 
 pub fun registered_input_handler_test() : <div> test_result
-  val target_id = todo_panel_listener_path(Input_event, "draft-input")
   val (next_item, next_runtime_tree, _panel_node, _effects, handlers) = run_todo_panel(initial_model(), Nil)
-  match find_registered_input(handlers, target_id)
+  match find_registered_input_by_semantic(handlers, "draft-input")
     Just(found_input) -> {
-      val (updated, _updated_runtime_tree) = run_with_runtime_tree(target_id, next_item, next_runtime_tree, fn(current_owner) run_registered_input(found_input, "closure draft", current_owner))
+      val updated = run_runtime_action(current_runtime_frame(next_item, next_runtime_tree), fn(current_owner) run_registered_input(found_input, "closure draft", current_owner)).owner
       Test_result("Registered input handler updates draft", "inputs=" ++ count_registered_inputs(handlers).show ++ ", draft=" ++ updated.draft, updated.draft == "closure draft")
     }
-    Nothing -> Test_result("Registered input handler updates draft", target_id ++ " missing", False)
+    Nothing -> Test_result("Registered input handler updates draft", "draft-input missing", False)
 
 pub fun registered_click_handler_test() : <div> test_result
   with with_test_browser(False, "10:00:00")
@@ -75,7 +74,7 @@ pub fun registered_click_handler_test() : <div> test_result
   Test_result(
     "Rendered cancel payload stays local",
     "payload=" ++ cancel_payload ++ ", local=" ++ in_registry.show ++ ", notice=" ++ updated.notice,
-    cancel_payload == task_listener_path(updated_task, Click_event, "cancel-edit") && in_registry && not(task_editor_state/editing(editor_state)) && updated.notice == "Cancelled local task edit.")
+    cancel_payload == named_local_listener_path(component_child_path(component_local_path("todo", "panel"), "tasks", task/id(updated_task).show), Click_event, "cancel-edit") && in_registry && not(task_editor_state/editing(editor_state)) && updated.notice == "Cancelled local task edit.")
 
 pub fun timer_simulation_test() : <div> test_result
   val (label, waits) = capture_waits(fn() timer_logic())
@@ -139,7 +138,7 @@ pub fun vnode_click_payload_matches_route_test() : <div> test_result
   Test_result(
     "Vnode click payload matches route",
     "payload=" ++ cancel_node_payload ++ ", local=" ++ in_registry.show ++ ", notice=" ++ routed.notice,
-    cancel_node_payload == task_listener_path(target_task, Click_event, "cancel-edit") && in_registry && routed.notice == "Cancelled local task edit." && not(task_editor_state/editing(editor_state)))
+    cancel_node_payload == named_local_listener_path(component_child_path(component_local_path("todo", "panel"), "tasks", task/id(target_task).show), Click_event, "cancel-edit") && in_registry && routed.notice == "Cancelled local task edit." && not(task_editor_state/editing(editor_state)))
 
 // Verify that firing the local cancel semantic through the harness updates the owner.
 pub fun harness_cancel_edit_test() : <div> test_result

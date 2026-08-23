@@ -5,7 +5,6 @@ import runtime/dom
 import explore/react/core
 import explore/react/renderer
 import demo/model
-import demo/runtimebridge
 import demo/runtimeframe
 import demo/seed
 import demo/controller
@@ -67,13 +66,13 @@ fun commit(frame : runtime_frame) : _e ()
 
 fun next_click_frame(payload : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> runtime_frame
   match find_registered_click(handlers, payload)
-    Just(found_click) -> run_runtime_path(payload, frame, fn(current_owner) with_browser(fn() run_registered_click(found_click, current_owner)))
-    Nothing -> map_runtime_owner(frame, fn(owner) with_browser(fn() controller/dispatch_click(payload, owner)))
+    Just(found_click) -> run_runtime_action(frame, fn(current_owner) with_browser(fn() run_registered_click(found_click, current_owner)))
+    Nothing -> run_runtime_action(frame, fn(owner) with_browser(fn() controller/dispatch_click(payload, owner)))
 
 fun next_input_frame(channel : string, value : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> runtime_frame
   match find_registered_input(handlers, channel)
-    Just(found_input) -> run_runtime_path(channel, frame, fn(current_owner) run_registered_input(found_input, value, current_owner))
-    Nothing -> map_runtime_owner(frame, fn(owner) with_browser(fn() controller/dispatch_input(channel, value, owner)))
+    Just(found_input) -> run_runtime_action(frame, fn(current_owner) run_registered_input(found_input, value, current_owner))
+    Nothing -> run_runtime_action(frame, fn(owner) with_browser(fn() controller/dispatch_input(channel, value, owner)))
 
 fun dispatch_click(payload : string) : _e ()
   val frame = !frame_ref

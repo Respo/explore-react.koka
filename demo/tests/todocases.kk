@@ -89,8 +89,9 @@ pub fun add_task_focus_test() : <div> test_result
   val rendered = next_harness.owner
   val panel_node = next_harness.tree
   val effects = next_harness.effects
-  val focused_draft = any(effects, fn(item) scheduled_effect/path(item) == todo_panel_effect_path("focus-draft"))
-  val pulsed_notice = any(effects, fn(item) scheduled_effect/path(item) == todo_panel_effect_path("pulse-notice"))
+  val todo_scope = component_local_path("todo", "panel")
+  val focused_draft = any(effects, fn(item) scheduled_effect/path(item) == named_local_effect_path(todo_scope, "focus-draft"))
+  val pulsed_notice = any(effects, fn(item) scheduled_effect/path(item) == named_local_effect_path(todo_scope, "pulse-notice"))
   val has_focus_marker = vnode_has_attr_value(panel_node, "data-k-effect", "draft")
   Test_result(
     "Add task schedules focus",
@@ -105,7 +106,7 @@ pub fun start_edit_focus_test() : <div> test_result
   val panel_node = started_harness.tree
   val effects = started_harness.effects
   val expected = match find(rendered.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> task_effect_path(item, "focus-editor")
+    Just(item) -> named_local_effect_path(component_child_path(component_local_path("todo", "panel"), "tasks", task/id(item).show), "focus-editor")
     Nothing -> "missing"
   val expected_marker = match find(rendered.tasks, fn(item) 2 == task/id(item))
     Just(item) -> "task-draft-" ++ task/id(item).show

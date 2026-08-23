@@ -186,16 +186,13 @@ fun search_dropdown_item(item : search_menu_item, index : int, dispatch_search :
     span(search_menu_item/route_hint(item), class = "search-item-hint"),
   ], key = "search-drop-" ++ index.show, class = "search-dropdown-item")
 
-fun render_search_dropdown(items : list<search_menu_item>, dispatch_search : string -> listener) : <div> list<vnode>
-  map-indexed(items, fn(index, item) search_dropdown_item(item, index, dispatch_search))
-
 pub fun render_search_panel(demo : search_demo, dispatch_submit : listener, dispatch_search : string -> listener) : <div> vnode
   val items = if demo.visible_query == "" then menu_catalog() else matched_menu_items(menu_catalog(), demo.visible_query)
   val dropdown =
     if is-nil(items) then
       div(Nil, class = "search-dropdown-hidden")
     else
-      div(render_search_dropdown(items, dispatch_search), class = "search-dropdown")
+      div(map-indexed(items, fn(index, item) search_dropdown_item(item, index, dispatch_search)), class = "search-dropdown")
   section([
     div([
       div([
