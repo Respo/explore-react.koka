@@ -43,6 +43,9 @@
 
 - component state tree 已从业务 `model` 移出；
 - `demo/runtimeframe.kk` 是 app model 与 runtime tree 的统一 owner；
+- feature/view runner 不再接收或返回 `list<state_entry>`，统一由 `run_runtime_render(...)` 在线程边界读写；
+- app shell 与 feature runners 按顺序运行，避免嵌套 runtime handler 覆盖 child store 更新；
+- 父组件不再读取子组件 local store 做汇总；跨组件真正需要的数据应提升为 domain state；
 - 旧的 `demo/runtimebridge.kk` / `demo/runtimeowner.kk` 过渡层已经删除；
 - snapshot 使用 path + schema + version + payload；
 - malformed snapshot、unknown schema 和 version mismatch 会安全回退；

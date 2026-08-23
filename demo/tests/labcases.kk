@@ -14,7 +14,8 @@ import explore/react/state
 pub fun lab_local_routing_test() : <div> test_result
   with with_test_browser(False, "T+120")
   val base = initial_model()(route_name = normalize_route("lab"))
-  val (_base_owner, base_runtime_tree, _tree, _effects, _registry) = run_lab_panel(base, Nil)
+  val (base_frame, _tree, _effects, _registry) = run_runtime_render(current_runtime_frame(base, Nil), run_lab_panel)
+  val base_runtime_tree = runtime_frame/runtime_tree(base_frame)
   val drafted = run_runtime_action(current_runtime_frame(base, base_runtime_tree), fn(owner) {
     match handle_lab_input("lab-draft-101", "Shift traffic to backup POP.", owner)
       Just(result) -> result
@@ -26,7 +27,7 @@ pub fun lab_local_routing_test() : <div> test_result
       Nothing -> owner
   })
   val toggled_runtime_tree = toggled.runtime_tree
-  Test_result("Workflow lab local routing", "draft=" ++ lab_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ lab_incident_expanded(toggled_runtime_tree, 101).show, lab_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && lab_incident_expanded(toggled_runtime_tree, 101))
+  Test_result("Workflow lab local routing", "draft=" ++ inspect_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ inspect_incident_expanded(toggled_runtime_tree, 101).show, inspect_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && inspect_incident_expanded(toggled_runtime_tree, 101))
 
 pub fun workflow_sync_test() : <div> test_result
   val (next, waits, audits) = capture_workflow(fn() perform_sync(initial_model()(route_name = normalize_route("lab"))))
@@ -46,11 +47,11 @@ pub fun workflow_reply_test() : <div> test_result
   val ((next, next_runtime_tree), waits, _audits) = capture_workflow(fn() run_local_action(prepared_runtime_tree, fn() send_reply(prepared, 102)))
   val total = sum(waits)
   val lab = next.lab
-  val cleared = lab_incident_draft(next_runtime_tree, 102) == ""
+  val cleared = inspect_incident_draft(next_runtime_tree, 102) == ""
   val acked = match find(lab.incidents, fn(item) 102 == incident/id(item))
     Just(item) -> (match item.status { Status_acked -> True; _ -> False }) && item.server_note == "Shift replay traffic onto the cache-safe queue."
     Nothing -> False
-  Test_result("Workflow reply clears local draft", "waits=" ++ total.show ++ "ms, drafts=" ++ length(filter(lab.incidents, fn(item) lab_incident_draft(next_runtime_tree, incident/id(item)) != "")).show ++ ", status=" ++ lab.sync_status, cleared && acked && total == 60)
+  Test_result("Workflow reply clears local draft", "waits=" ++ total.show ++ "ms, drafts=" ++ length(filter(lab.incidents, fn(item) inspect_incident_draft(next_runtime_tree, incident/id(item)) != "")).show ++ ", status=" ++ lab.sync_status, cleared && acked && total == 60)
 
 pub fun bridge_pending_test() : <div> test_result
   val (next, requests, audits) = capture_bridge_load(bridge_base_model(), "edge-auth")

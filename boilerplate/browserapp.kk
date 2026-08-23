@@ -53,11 +53,12 @@ fun log_registry_warnings(messages : list<string>) : _e ()
 fun commit(frame : runtime_frame) : _e ()
   val previous_frame = !frame_ref
   val previous_handlers = !handlers_ref
-  val (next_model, next_runtime_tree, next_tree, pending_effects, next_handlers) = render_app_with_runtime(Just(runtime_frame/owner(previous_frame)), runtime_frame/owner(frame), runtime_frame/runtime_tree(frame), demo_test_results())
+  val (next_frame, next_tree, pending_effects, next_handlers) = run_runtime_render(frame, fn(owner) render_app_with_runtime(Just(runtime_frame/owner(previous_frame)), owner, demo_test_results()))
+  val next_model = runtime_frame/owner(next_frame)
   val patches = diff_node("0", !tree_ref, next_tree)
   apply_patches(!root_id_ref, patches)
   browser_set_hash(next_model.route_name)
-  frame_ref := current_runtime_frame(next_model, next_runtime_tree)
+  frame_ref := next_frame
   tree_ref := next_tree
   handlers_ref := next_handlers
   log_registry_warnings(event_registry/warnings(next_handlers))
@@ -103,8 +104,9 @@ pub fun boot_with_snapshot(root_id : string, snapshot : string) : _e ()
   attach_events(root_id)
   val start_model = initial_model()(route_name = normalize_route(browser_hash()))
   val restored_runtime_tree = decode_state_snapshot(snapshot)
-  val (next_model, next_runtime_tree, tree, pending_effects, handlers) = render_app_with_runtime(Nothing, start_model, restored_runtime_tree, demo_test_results())
-  frame_ref := current_runtime_frame(next_model, next_runtime_tree)
+  val (next_frame, tree, pending_effects, handlers) = run_runtime_render(current_runtime_frame(start_model, restored_runtime_tree), fn(owner) render_app_with_runtime(Nothing, owner, demo_test_results()))
+  val next_model = runtime_frame/owner(next_frame)
+  frame_ref := next_frame
   tree_ref := tree
   handlers_ref := handlers
   mount_html(root_id, render_node("0", tree))

@@ -19,9 +19,9 @@ pub effect hook_scope
   fun pop_hook_scope() : ()
   fun current_hook_scope_name() : string
 
-pub effect runtime_tree_host
-  fun get_runtime_tree() : list<state_entry>
-  fun set_runtime_tree(tree : list<state_entry>) : ()
+pub effect component_runtime
+  fun get_component_state_entries() : list<state_entry>
+  fun set_component_state_entries(tree : list<state_entry>) : ()
 
 pub effect hook_state
   fun use_state<a>(fallback : a, ?state_codec : state_codec<a>) : a
@@ -136,12 +136,12 @@ pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
 pub fun pure_component_run<s,e::E,a>(owner : s, result : a) : <div> (s, a, list<scheduled_effect>, event_registry<s,e>)
   (owner, result, Nil, empty_event_registry())
 
-pub fun with_runtime_tree_host<a,e>(tree : list<state_entry>, action : () -> <runtime_tree_host|e> a) : e (a, list<state_entry>)
+pub fun with_component_runtime<a,e>(tree : list<state_entry>, action : () -> <component_runtime|e> a) : e (a, list<state_entry>)
   var next_tree := tree
   with return(result) (result, next_tree)
   with handler
-    fun get_runtime_tree() next_tree
-    fun set_runtime_tree(next_value) next_tree := next_value
+    fun get_component_state_entries() next_tree
+    fun set_component_state_entries(next_value) next_tree := next_value
   action()
 
 pub fun run_scheduled_effect(item : scheduled_effect) : io ()
@@ -509,7 +509,7 @@ pub fun run_event_registry<s,e::E,a>(action : () -> <listener_registry<s,e>,div>
   }
   action()
 
-pub fun run_stateful_component_with_tree<s,e::E,a>(
+fun run_stateful_component_with_tree<s,e::E,a>(
   owner : s,
   tree : list<state_entry>,
   render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> a
@@ -519,48 +519,21 @@ pub fun run_stateful_component_with_tree<s,e::E,a>(
 
 pub fun run_stateful_component<s,e::E,a>(
   owner : s,
-  tree : list<state_entry>,
-  assign_tree : (s, list<state_entry>) -> s,
   render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> a
-) : <div> (s, a, list<scheduled_effect>, event_registry<s,e>)
-  val (current_owner, next_tree, result, pending_effects, handlers) = run_stateful_component_with_tree(owner, tree, render)
-  (assign_tree(current_owner, next_tree), result, pending_effects, handlers)
-
-// Root app rendering should look like one component-runtime entry instead of
-// spelling the empty local tree plumbing at each call site.
-pub fun run_root_component<s,e::E,a>(
-  owner : s,
-  group_name : string,
-  key_name : string,
-  render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> (s, a, list<scheduled_effect>, event_registry<s,e>)
-) : <div> (s, a, list<scheduled_effect>, event_registry<s,e>)
-  flatten_component_run(run_stateful_component(
-    owner,
-    Nil,
-    fn(next_owner, _next_tree) next_owner,
-    fn(next_owner) component_root(group_name, key_name, fn() render(next_owner))))
-
-pub fun run_root_component_with_tree<s,e::E,t,a>(
-  owner : s,
-  group_name : string,
-  key_name : string,
-  render : (s) -> <local_state_read,local_state_write,hook_effects,hook_scope,hook_state,listener_registry<s,e>,div> (s, t, a, list<scheduled_effect>, event_registry<s,e>)
-) : <div> (s, t, a, list<scheduled_effect>, event_registry<s,e>)
-  flatten_component_tree_run(run_stateful_component(
-    owner,
-    Nil,
-    fn(next_owner, _next_tree) next_owner,
-    fn(next_owner) component_root(group_name, key_name, fn() render(next_owner))))
+) : <component_runtime,div> (s, a, list<scheduled_effect>, event_registry<s,e>)
+  val (current_owner, next_tree, result, pending_effects, handlers) = run_stateful_component_with_tree(owner, current_component_state_entries(), render)
+  replace_component_state_entries(next_tree)
+  (current_owner, result, pending_effects, handlers)
 
 pub fun read_local_state(tree : list<state_entry>, action : () -> <local_state_read,div|e> a) : <div|e> a
   with fun use_named_state(entry_slot, codec, fallback) state_value(tree, entry_slot, fallback, codec)
   action()
 
-pub fun current_runtime_tree() : <runtime_tree_host,div> list<state_entry>
-  get_runtime_tree()
+pub fun current_component_state_entries() : <component_runtime,div> list<state_entry>
+  get_component_state_entries()
 
-pub fun replace_runtime_tree(tree : list<state_entry>) : <runtime_tree_host,div> ()
-  set_runtime_tree(tree)
+pub fun replace_component_state_entries(tree : list<state_entry>) : <component_runtime,div> ()
+  set_component_state_entries(tree)
 
 fun clear_slot(entry_slot : state_slot) : <local_state_write,div> ()
   clear_local_state(state_slot/path(entry_slot))
@@ -641,27 +614,6 @@ pub fun map_component_run<s,e::E,a,b,f::E>(
 ) : <div|f> (s, b, list<scheduled_effect>, event_registry<s,e>)
   val (owner, result, effects, handlers) = item
   (owner, transform(owner, result), effects, handlers)
-
-pub fun map_component_tree_run<s,e::E,t,a,b,f::E>(
-  item : (s, t, a, list<scheduled_effect>, event_registry<s,e>),
-  transform : (s, a) -> <div|f> b
-) : <div|f> (s, t, b, list<scheduled_effect>, event_registry<s,e>)
-  val (owner, tree, result, effects, handlers) = item
-  (owner, tree, transform(owner, result), effects, handlers)
-
-pub fun flatten_component_run<s,e::E,a>(
-  item : (s, (s, a, list<scheduled_effect>, event_registry<s,e>), list<scheduled_effect>, event_registry<s,e>)
-) : <div> (s, a, list<scheduled_effect>, event_registry<s,e>)
-  val (_outer_owner, inner, outer_effects, outer_handlers) = item
-  val (owner, result, inner_effects, inner_handlers) = inner
-  (owner, result, append_scheduled_effects(inner_effects, outer_effects), append_event_registries(outer_handlers, inner_handlers))
-
-pub fun flatten_component_tree_run<s,e::E,t,a>(
-  item : (s, (s, t, a, list<scheduled_effect>, event_registry<s,e>), list<scheduled_effect>, event_registry<s,e>)
-) : <div> (s, t, a, list<scheduled_effect>, event_registry<s,e>)
-  val (_outer_owner, inner, outer_effects, outer_handlers) = item
-  val (owner, tree, result, inner_effects, inner_handlers) = inner
-  (owner, tree, result, append_scheduled_effects(inner_effects, outer_effects), append_event_registries(outer_handlers, inner_handlers))
 
 fun effect_signature(deps : list<string>) : <div> string
   match deps

@@ -29,6 +29,7 @@ pub fun demo_test_results() : <div> list<test_result>
     harness_cancel_edit_test(),
     harness_draft_input_test(),
     harness_multi_step_test(),
+    app_runtime_preserves_child_store_test(),
     lab_local_routing_test(),
     add_task_focus_test(),
     start_edit_focus_test(),

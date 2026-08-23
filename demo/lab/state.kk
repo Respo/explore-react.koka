@@ -53,12 +53,6 @@ fun incident_component_key(incident_id : int) : string
 fun incident_scope_path(incident_id : int) : string
   component_child_path(lab_panel_scope_path(), "incidents", incident_component_key(incident_id))
 
-pub fun lab_incident_expanded(tree : list<state_entry>, incident_id : int) : <div> bool
-  read_store_state(tree, incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, "")).expanded
-
-pub fun lab_incident_draft(tree : list<state_entry>, incident_id : int) : <div> string
-  read_store_state(tree, incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, "")).draft
-
 pub fun current_incident_local_state(incident_id : int) : <local_state_read,div> incident_local_state
   current_store_state(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""))
 

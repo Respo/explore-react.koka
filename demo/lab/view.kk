@@ -93,14 +93,12 @@ fun lab_panel_sections(route_name : string, lab : workflow_lab) : lab_view_effec
       ], class = "lab-body-grid"),
     ]
 
-pub fun render_lab_panel(item : model, runtime_tree : list<state_entry>) : lab_view_effect vnode
+pub fun render_lab_panel(item : model) : lab_view_effect vnode
   val lab = item.lab
   val children = [
     div([
       summary_chip("Incidents", length(lab.incidents).show),
       summary_chip("Open", length(filter(lab.incidents, fn(incident_item) match incident_item.status { Status_acked -> False; _ -> True })).show),
-      summary_chip("Drafts", length(filter(lab.incidents, fn(incident_item) lab_incident_draft(runtime_tree, incident/id(incident_item)) != "")).show),
-      summary_chip("Local cells", count_entries(runtime_tree).show),
       summary_chip("Last sync", lab.last_sync_label),
     ], class = "summary-row"),
   ] ++ lab_panel_sections(item.route_name, lab)

@@ -25,6 +25,15 @@ pub struct bridge_expectation
   shell_status : string
   detail_status : string
 
+pub fun inspect_task_editor(tree : list<state_entry>, item : task) : <div> task_editor_state
+  read_local_state(tree, fn() current_task_editor(item))
+
+pub fun inspect_incident_draft(tree : list<state_entry>, incident_id : int) : <div> string
+  read_local_state(tree, fn() current_incident_local_state(incident_id)).draft
+
+pub fun inspect_incident_expanded(tree : list<state_entry>, incident_id : int) : <div> bool
+  read_local_state(tree, fn() current_incident_local_state(incident_id)).expanded
+
 pub fun maybe_text(target : maybe<string>) : string
   match target
     Just(name) -> name
@@ -245,12 +254,12 @@ pub struct component_harness
   registry : event_registry<model, browser_event_effect>
   runtime_tree : list<state_entry>
 
-pub fun todo_harness_render(owner : model, runtime_tree : list<state_entry>) : <div> component_harness
-  val (next_model, next_runtime_tree, tree, effects, registry) = run_todo_panel(owner, runtime_tree)
-  Component_harness(next_model, tree, effects, registry, next_runtime_tree)
+pub fun todo_harness_render(frame : runtime_frame) : <div> component_harness
+  val (next_frame, tree, effects, registry) = run_runtime_render(frame, run_todo_panel)
+  Component_harness(runtime_frame/owner(next_frame), tree, effects, registry, runtime_frame/runtime_tree(next_frame))
 
 pub fun todo_harness(owner : model) : <div> component_harness
-  todo_harness_render(owner, Nil)
+  todo_harness_render(current_runtime_frame(owner, Nil))
 
 fun run_harness_action<e>(h : component_harness, action : (model) -> <local_state_read,local_state_write,div|e> model) : <div|e> runtime_frame
   run_runtime_action(current_runtime_frame(h.owner, h.runtime_tree), action)
@@ -260,13 +269,13 @@ fun run_harness_action<e>(h : component_harness, action : (model) -> <local_stat
 pub fun harness_fire_named_click(
   h : component_harness,
   semantic_name : string,
-  render_fn : (model, list<state_entry>) -> <div> component_harness
+  render_fn : (runtime_frame) -> <div> component_harness
 ) : <bridge_demo_effect,div> component_harness
   match find_registered_click_by_semantic(h.registry, semantic_name)
     Nothing -> h
     Just(found) -> {
       val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
-      render_fn(next.owner, next.runtime_tree)
+      render_fn(next)
     }
 
 // Fire a locally-registered input by semantic name; re-render via render_fn.
@@ -274,26 +283,26 @@ pub fun harness_fire_named_input(
   h : component_harness,
   semantic_name : string,
   value : string,
-  render_fn : (model, list<state_entry>) -> <div> component_harness
+  render_fn : (runtime_frame) -> <div> component_harness
 ) : <div> component_harness
   match find_registered_input_by_semantic(h.registry, semantic_name)
     Nothing -> h
     Just(found) -> {
       val next = run_harness_action(h, fn(current_owner) run_registered_input(found, value, current_owner))
-      render_fn(next.owner, next.runtime_tree)
+      render_fn(next)
     }
 
 pub fun harness_fire_input_channel(
   h : component_harness,
   channel : string,
   value : string,
-  render_fn : (model, list<state_entry>) -> <div> component_harness
+  render_fn : (runtime_frame) -> <div> component_harness
 ) : <div> component_harness
   match find_registered_input(h.registry, channel)
     Nothing -> h
     Just(found) -> {
       val next = run_harness_action(h, fn(current_owner) run_registered_input(found, value, current_owner))
-      render_fn(next.owner, next.runtime_tree)
+      render_fn(next)
     }
 
 // Fire a click using the exact payload string (the value in data-k-click).
@@ -301,12 +310,12 @@ pub fun harness_fire_input_channel(
 pub fun harness_fire_click_payload(
   h : component_harness,
   payload : string,
-  render_fn : (model, list<state_entry>) -> <div> component_harness
+  render_fn : (runtime_frame) -> <div> component_harness
 ) : <bridge_demo_effect,div> component_harness
   match find_registered_click(h.registry, payload)
     Just(found) -> {
       val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
-      render_fn(next.owner, next.runtime_tree)
+      render_fn(next)
     }
     Nothing -> h
 
@@ -318,6 +327,6 @@ pub fun todo_harness_click_payload(
   match find_registered_click(h.registry, payload)
     Just(found) -> {
       val next = run_harness_action(h, fn(current_owner) run_registered_click(found, current_owner))
-      todo_harness_render(next.owner, next.runtime_tree)
+      todo_harness_render(next)
     }
     Nothing -> h

@@ -59,9 +59,6 @@ fun task_component_key(item : task) : string
 fun task_scope_path(item : task) : string
   component_child_path(todo_panel_scope_path(), "tasks", task_component_key(item))
 
-fun read_task_state(tree : list<state_entry>, item : task) : <div> task_editor_state
-  read_store_state(tree, task_scope_path(item), task_editor_store, Task_editor_state(False, item.title))
-
 pub fun current_task_editor(item : task) : <local_state_read,div> task_editor_state
   current_store_state(task_scope_path(item), task_editor_store, Task_editor_state(False, item.title))
 
@@ -75,6 +72,3 @@ pub fun clear_done_task_editors(tasks : list<task>) : <local_state_write,div> ()
   foreach(tasks, fn(item)
     if item.done then clear_task_editor(item) else ()
   )
-
-pub fun snapshot_task_editor(tree : list<state_entry>, item : task) : <div> task_editor_state
-  read_task_state(tree, item)
