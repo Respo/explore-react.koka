@@ -26,6 +26,10 @@ pub fun emit_action<a>(source : string, target : string, codec : action_codec<a>
 
 pub fun capture_actions<a,e>(action : () -> <action_observation|e> a) : e (a, list<action_envelope>)
   var actions := Nil
-  with return(result) (result, actions)
-  with fun observe_action(envelope) actions := append(actions, [envelope])
+  with return(result) (result, reverse(actions))
+  with fun observe_action(envelope) actions := Cons(envelope, actions)
+  action()
+
+pub fun discard_actions<a,e>(action : () -> <action_observation|e> a) : e a
+  with fun observe_action(_envelope) ()
   action()
