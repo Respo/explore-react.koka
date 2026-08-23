@@ -14,9 +14,10 @@
 ## 仓库结构
 
 - 仓库根目录：就是 Koka 源码根目录，编译时直接把 repo root 当成模块搜索根。
-- `app.kk`：浏览器入口，负责 boot、事件桥接、状态提交、路由同步。
-- `explore/react/*`：核心 VDOM、render、diff/patch。这里尽量保持通用。
+- `app.kk`：浏览器入口，只暴露 boot、事件桥接和 runtime snapshot 导入导出。
+- `explore/react/*`：核心 VDOM、typed component store、listener registry、render、diff/patch。这里尽量保持通用。
 - `demo/*`：具体 demo、布局、组件、路由和测试辅助。
+- `demo/runtimeframe.kk`：app 边界的 runtime owner，同时持有业务 model 和框架 state tree。
 - `runtime/*`：只放 DOM 和系统边界的 FFI，不要把业务逻辑塞进来。
 - `scripts/build-koka.mjs`：从仓库根目录调用 Koka，输出到 `src/generated/koka`。
 - `scripts/test-koka.mjs`：从仓库根目录执行 `tests_main.kk`。
@@ -61,7 +62,7 @@ koka --target=jsweb --library --builddir=.koka-build --outputdir=./src/generated
 - 编译 Koka 时，`cwd` 应该直接对齐到仓库根目录，否则像 `demo/model` 这样的导入可能找不到。
 - 导入路径以仓库根为根：`import demo/model`，不要写 `import koka/demo/model`。
 - 生成入口文件名不稳定，所以构建脚本靠扫描 `export function boot(` 找入口，不要手写猜测产物名。
-- 浏览器桥应该保持很薄，目前只导出少量入口给宿主层，例如 `boot`、点击/输入派发、路由派发。
+- 浏览器桥应该保持很薄，目前只导出少量入口给宿主层，例如 `boot_with_snapshot`、点击/输入派发、路由派发和 snapshot 导出。
 
 ## Yarn 与 Vite 工作流
 
@@ -135,31 +136,52 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
   这类函数只是给 struct 字段起别名，拆得越多越难找逻辑。调用方直接内联 `task/title(item)` 或 `item.title`，保持代码密度。
 - 只在以下情况才抽函数：有额外逻辑（条件、组合、副作用），或者跨模块需要稳定的公开接口名称。
 
-## 组件本地状态约定（React useState 对齐）
+## 组件本地状态约定（typed store + actions）
 
-后续重构以 **React 风格 hooks API** 为目标，允许 breaking change。核心要求如下：
+组件交互状态以 **typed store + serializable actions** 为默认方案。它保留 React reducer 的简单心智模型，同时满足 Koka 严格类型、HMR 和 snapshot 恢复需求。
 
-- 组件内本地状态调用形式统一收敛到 `use_state(fallback)` / `use_state_pair(fallback)` 这一类 API，**调用点不再显式传 codec**。
-- `codec`、状态序列化、slot/path、树结构读写都属于 **框架内部实现细节**，不再暴露为业务组件必须理解的概念。
-- hook 状态的定位仍按调用顺序工作，行为对齐 React：同一个组件内 `use_state(...)` 的顺序决定状态槽位；业务代码不直接依赖槽位编号。
-- 组件外部若必须读写本地状态，也应通过更高层的框架接口或受控组件协议完成；不要把 codec/index/path 细节继续扩散到业务模块。
-- 现有 `*_state_codec`、named/indexed state helper、显式 slot 管理只视为迁移期方案；当前任务结束后，优先把这套接口往框架内部收拢。
+- 业务组件用 `use_store(spec, initial = ...)` 读取一个 typed binding，状态从 `binding.current` 解构。
+- UI 事件优先用 `on_store_click(...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
+- 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
+- scope/path/slot/tree 属于 framework/runtime 细节。列表组件用 `components(items, group = ..., key = ..., render = ...)` 建立稳定 identity。
+- 组件外协调状态时用 `current_store_state(...)` / `dispatch_store(...)` 这类 typed API；不要在业务模块复制 tree 编解码。
+- action 必须可序列化，方便事件日志、恢复、回放，以及后续 agents/actions/store 工具链。
 
-简化后的目标调用形态：
-
-```koka
-val (editing, set_editing) = use_state_pair(False)
-val (draft, set_draft) = use_state_pair(item.title)
-```
-
-不再继续扩散的旧形态：
+推荐形态：
 
 ```koka
-val (editing, set_editing) = use_state_pair(flag_state_codec, False)
-val (draft, set_draft) = use_state_pair(text_state_codec, item.title)
+val editor = use_store(
+  task_editor_store,
+  initial = Task_editor_state(False, item.title))
+val Task_editor_state(editing, draft) = editor.current
+
+input_text(
+  draft,
+  input = on_store_input("draft-input", editor, Change_draft))
 ```
 
-**约束**：重构时优先保证组件语义与用户交互稳定，其次才是兼容旧 API。既然允许 breaking，就直接按 React 心智模型收敛，不为旧 codec 调用形式保留长期包袱。
+`state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
+
+## Element 调用约定
+
+- element 的主要内容保持第一个位置参数：容器传 `list<vnode>`，文本元素传 `string`。
+- 常用 DOM 属性和事件压平为 labelled arguments，例如 `class = ...`、`key = ...`、`click = ...`、`input = ...`。
+- 不使用 `attrs = {...}, children = ...` 这种嵌套记录写法。
+- 少见 DOM 属性和事件才放进 `extra_attrs` / `extra_events` escape hatch。
+
+```koka
+div([
+  strong(item.title, class = "task-title"),
+  button("Edit", class = "button", click = edit_listener),
+], key = item.id.show, class = "task-item")
+```
+
+## Runtime snapshot 与 HMR
+
+- component runtime tree 不放回业务 `model`；app 边界通过 `runtime_frame` 持有。
+- snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
+- `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
+- snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。
 
 ## Koka 常见易错点
 
