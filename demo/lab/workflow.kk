@@ -3,6 +3,7 @@ module demo/lab/workflow
 import demo/model
 import demo/lab/state
 import library/bridge
+import explore/react/action
 import explore/react/state
 
 fun append_lines(lines : list<string>, value : string) : <div> list<string>
@@ -93,7 +94,7 @@ pub fun perform_sync(item : model) : <sync_host_effect,div> model
     last_sync_label = stamp)
   item(lab = next_lab, notice = "Workflow lab sync finished through algebraic effects.")
 
-pub fun send_reply(item : model, incident_id : int) : <reply_host_effect,local_state_read,local_state_write,div> model
+pub fun send_reply(item : model, incident_id : int) : <action_observation,reply_host_effect,local_state_read,local_state_write,div> model
   val lab = item.lab
   val draft = current_incident_local_state(incident_id).draft
   if draft == "" then

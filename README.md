@@ -134,7 +134,7 @@ back from a child's local cell.
 
 Simple named state primitives still exist for experiments, but new business
 components should prefer a typed store when state can be changed by user
-events. This keeps updates action-shaped, replayable, and compatible with
+events. This keeps updates action-shaped, observable, and compatible with
 future agent-driven action/store tooling.
 
 ## Listener identity and event dispatch
@@ -162,6 +162,39 @@ Store listeners are intentionally a narrower convenience layer:
 - `on_store_input(...)` converts the input string into one typed local action;
 - `on_local_*` remains available when the event also changes the owner model or
   invokes other effects.
+
+## Serializable action observation
+
+Domain actions and component-store actions now cross the same observation
+boundary. Each dispatch emits an `action_envelope` containing only serializable
+data:
+
+```koka
+Action_envelope(
+  source = "domain",       // or "component"
+  target = "todo/tasks/2",
+  schema = "todo/task-action",
+  version = 1,
+  payload = "e")
+```
+
+`source` describes ownership, `target` identifies the domain or component
+scope, and `schema + version + payload` are owned by the typed action codec. A
+single user event may emit more than one envelope. For example, starting a Todo
+edit emits the domain intent first and then the component editor-store action.
+
+The observation point is an Algebraic Effect. `capture_actions(...)` gives
+tests and other hosts the ordered envelopes without coupling reducers to a
+logger. The browser runtime uses `run_runtime_action_observed(...)` to log the
+same stream, while `run_runtime_action(...)` deliberately handles and discards
+it for callers that do not need observation.
+
+This is an intent log, not a replay engine. Dispatch is observed before the
+reducer/workflow runs, so an action remains visible even when confirmation
+rejects it. Replaying actions that invoke browser or service effects needs a
+separate policy for permissions, deduplication, and recorded responses. Until
+that policy exists, the runtime does not automatically persist or replay the
+action stream.
 
 ## State snapshots, HMR, and reloads
 
@@ -232,6 +265,8 @@ diffing, and patch planning remain in Koka.
 
 - `app.kk`: small exported browser bridge.
 - `explore/react/core.kk`: VDOM types and flattened element constructors.
+- `explore/react/action.kk`: serializable action codecs, envelopes, and the
+  observation effect.
 - `explore/react/state.kk`: component scopes, typed stores, listeners, effects,
   snapshots, and runtime handlers.
 - `explore/react/renderer.kk`: rendering, diffing, and patch planning.
@@ -244,13 +279,14 @@ diffing, and patch planning remain in Koka.
 Recommended reading order:
 
 1. `explore/react/core.kk`
-2. `explore/react/state.kk`
-3. `demo/todo/state.kk`
-4. `demo/todo/view.kk`
-5. `demo/lab/state.kk`
-6. `demo/lab/view.kk`
-7. `demo/runtimeframe.kk`
-8. `app.kk` and `src/main.js`
+2. `explore/react/action.kk`
+3. `explore/react/state.kk`
+4. `demo/todo/state.kk`
+5. `demo/todo/view.kk`
+6. `demo/lab/state.kk`
+7. `demo/lab/view.kk`
+8. `demo/runtimeframe.kk`
+9. `app.kk` and `src/main.js`
 
 ## Run locally
 
@@ -272,7 +308,8 @@ The current experiment combines three ideas:
 
 1. React-like plain function components and keyed identity.
 2. Reducer-backed, serializable local stores for component interaction.
-3. Algebraic Effects for explicit runtime and environment capabilities.
+3. A shared serializable observation stream for domain and component actions.
+4. Algebraic Effects for explicit runtime and environment capabilities.
 
 The useful question is not whether this can reproduce React API-for-API. It is
 whether typed effects and serializable actions can make component boundaries,

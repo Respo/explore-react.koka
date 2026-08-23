@@ -25,6 +25,7 @@ pub fun demo_test_results() : <div> list<test_result>
     auto_hook_scope_test(),
     listener_registry_guard_test(),
     todo_editor_store_protocol_test(),
+    unified_action_observation_test(),
     vnode_click_payload_matches_route_test(),
     harness_cancel_edit_test(),
     harness_draft_input_test(),

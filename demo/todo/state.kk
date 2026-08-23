@@ -1,6 +1,7 @@
 module demo/todo/state
 
 import demo/model
+import explore/react/action
 import explore/react/core
 import explore/react/state
 
@@ -62,7 +63,7 @@ fun task_scope_path(item : task) : string
 pub fun current_task_editor(item : task) : <local_state_read,div> task_editor_state
   current_store_state(task_scope_path(item), task_editor_store, Task_editor_state(False, item.title))
 
-pub fun dispatch_task_editor(item : task, action : task_editor_action) : <local_state_write,div> ()
+pub fun dispatch_task_editor(item : task, action : task_editor_action) : <action_observation,local_state_write,div> ()
   dispatch_store(task_scope_path(item), task_editor_store, Task_editor_state(False, item.title), action)
 
 pub fun clear_task_editor(item : task) : <local_state_write,div> ()

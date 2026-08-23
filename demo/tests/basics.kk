@@ -10,6 +10,7 @@ import demo/tests/support
 import demo/todo/events
 import demo/todo/state
 import demo/todopanel
+import explore/react/action
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
@@ -46,6 +47,7 @@ pub fun ambient_filter_test() : <div> test_result
   Test_result("Ambient filter previews", "active=" ++ active_count.show ++ ", done=" ++ done_count.show, active_count == 2 && done_count == 1)
 
 pub fun registered_input_handler_test() : <div> test_result
+  with with_test_browser(False, "T+0")
   val (next_frame, _panel_node, _effects, handlers) = run_runtime_render(current_runtime_frame(initial_model(), Nil), run_todo_panel)
   val next_item = runtime_frame/owner(next_frame)
   val next_runtime_tree = runtime_frame/runtime_tree(next_frame)
@@ -86,18 +88,25 @@ pub fun timer_simulation_test() : <div> test_result
 
 pub fun route_subroute_normalization_test() : <div> test_result
   with with_test_browser(False, "10:00:00")
-  val lab_route = match handle_route_click(route_action_payload(Navigate("lab-search")), initial_model())
-    Just(result) -> result.route_name
-    Nothing -> "missing"
-  val effects_route = match handle_route_click(route_action_payload(Navigate("effects-dialogs")), initial_model())
-    Just(result) -> result.route_name
-    Nothing -> "missing"
+  val (routes, actions) = capture_actions(fn() {
+    val lab_route = match handle_route_click(route_action_payload(Navigate("lab-search")), initial_model())
+      Just(result) -> result.route_name
+      Nothing -> "missing"
+    val effects_route = match handle_route_click(route_action_payload(Navigate("effects-dialogs")), initial_model())
+      Just(result) -> result.route_name
+      Nothing -> "missing"
+    (lab_route, effects_route)
+  })
+  val (lab_route, effects_route) = routes
   val legacy_lab = normalize_route("lab")
   val legacy_effects = normalize_route("effects")
+  val observed = match actions
+    [lab_action, effects_action] -> lab_action.schema == "app/route-action" && effects_action.schema == "app/route-action"
+    _ -> False
   Test_result(
     "Route subpages normalize",
     "lab=" ++ lab_route ++ ", effects=" ++ effects_route ++ ", legacy=" ++ legacy_lab ++ "/" ++ legacy_effects,
-    lab_route == "lab-search" && effects_route == "effects-dialogs" && legacy_lab == "lab-board" && legacy_effects == "effects-core")
+    lab_route == "lab-search" && effects_route == "effects-dialogs" && legacy_lab == "lab-board" && legacy_effects == "effects-core" && observed)
 
 pub fun route_bar_click_is_local_test() : <div> test_result
   with with_test_browser(False, "T+0")
@@ -161,6 +170,7 @@ pub fun harness_cancel_edit_test() : <div> test_result
 // Verify that an input event fired via harness updates the model and is reflected
 // in the re-rendered vnode's value attribute.
 pub fun harness_draft_input_test() : <div> test_result
+  with with_test_browser(False, "T+0")
   val h0 = todo_harness(initial_model())
   val h1 = harness_fire_named_input(h0, "draft-input", "typed via harness", todo_harness_render)
   val input_value = match vnode_find_attr_value(h1.tree, "data-k-effect", "draft")
