@@ -179,6 +179,9 @@ div([
 ## Runtime snapshot 与 HMR
 
 - component runtime tree 不放回业务 `model`；app 边界通过 `runtime_frame` 持有。
+- feature/view API 不得接收或返回 `list<state_entry>`；render transition 统一通过 `run_runtime_render(...)`。
+- parent component 不读取 child local store 做业务汇总；确实需要上层观察的数据提升到 domain model，纯调试统计放到 framework inspector。
+- component runners 必须串行操作 runtime host，不要把一个 stateful runner 嵌套在另一个 runner 的 render callback 内。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
 - snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。

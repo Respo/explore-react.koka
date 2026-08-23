@@ -23,11 +23,11 @@ fun intro_panel(item : model) : <div> vnode
 fun wrap_single_stage(node : vnode) : vnode
   div([node], class = "single-stage")
 
-fun overview_stage(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  val (todo_item, next_runtime_tree, todo_node, todo_effects, todo_handlers) = run_todo_panel(item, runtime_tree)
-  val (lab_item, next_runtime_tree2, lab_node, lab_effects, lab_handlers) = run_lab_panel(todo_item, next_runtime_tree)
+fun overview_stage(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+  val (todo_item, todo_node, todo_effects, todo_handlers) = run_todo_panel(item)
+  val (lab_item, lab_node, lab_effects, lab_handlers) = run_lab_panel(todo_item)
   val (effects_item, effects_node, effects, handlers) = run_effects_panel(lab_item, results)
-  (effects_item, next_runtime_tree2, div([
+  (effects_item, div([
     div([
       todo_node,
     ], class = "overview-main"),
@@ -42,26 +42,29 @@ fun overview_stage(item : model, runtime_tree : list<state_entry>, results : lis
     ], class = "overview-wide"),
   ], class = "overview-grid"), append_scheduled_effects(append_scheduled_effects(todo_effects, lab_effects), effects), append_event_registries(append_event_registries(todo_handlers, lab_handlers), handlers))
 
-fun route_stage(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+fun route_stage(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
   if item.route_name == "todo" then
-    map_component_tree_run(run_todo_panel(item, runtime_tree), fn(_next_item, todo_node) wrap_single_stage(todo_node))
+    map_component_run(run_todo_panel(item), fn(_next_item, todo_node) wrap_single_stage(todo_node))
   else if route_is_lab(item.route_name) then {
-    val (next_item, next_runtime_tree, lab_node, effects, handlers) = run_lab_panel(item, runtime_tree)
-    (next_item, next_runtime_tree, wrap_single_stage(lab_node), effects, handlers)
+    val (next_item, lab_node, effects, handlers) = run_lab_panel(item)
+    (next_item, wrap_single_stage(lab_node), effects, handlers)
   }
   else if route_is_effects(item.route_name) then {
     val (next_item, effects_node, effects, handlers) = run_effects_panel(item, results)
-    (next_item, runtime_tree, wrap_single_stage(effects_node), effects, handlers)
+    (next_item, wrap_single_stage(effects_node), effects, handlers)
   }
   else if item.route_name == "checks" then
-    (item, runtime_tree, wrap_single_stage(tests_panel(results)), Nil, empty_event_registry())
+    (item, wrap_single_stage(tests_panel(results)), Nil, empty_event_registry())
   else
-    overview_stage(item, runtime_tree, results)
+    overview_stage(item, results)
 
-pub fun render_layout(item : model, runtime_tree : list<state_entry>, results : list<test_result>) : <hook_scope,listener_registry<model,browser_event_effect>,div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  val stage_run = route_stage(item, runtime_tree, results)
-  map_component_tree_run(stage_run, fn(owner, current_stage) section([
-    intro_panel(owner),
-    route_bar(owner),
-    current_stage,
-  ], key = "app", class = "shell app-shell"))
+pub fun render_layout(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+  val (stage_owner, current_stage, stage_effects, stage_handlers) = route_stage(item, results)
+  val (next_owner, shell_node, shell_effects, shell_handlers) = run_stateful_component(
+    stage_owner,
+    fn(owner) component_root("app", "root", fn() section([
+      intro_panel(owner),
+      route_bar(owner),
+      current_stage,
+    ], key = "app", class = "shell app-shell")))
+  (next_owner, shell_node, append_scheduled_effects(stage_effects, shell_effects), append_event_registries(shell_handlers, stage_handlers))

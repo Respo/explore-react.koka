@@ -7,15 +7,10 @@ import library/bridge
 import explore/react/core
 import explore/react/state
 
-pub fun lab_panel(item : model, runtime_tree : list<state_entry>) : <div> vnode
-  val (_next_item, _next_runtime_tree, panel_node, _pending_effects, _handlers) = run_lab_panel(item, runtime_tree)
-  panel_node
-
-pub fun run_lab_panel(item : model, runtime_tree : list<state_entry>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_stateful_component_with_tree(
+pub fun run_lab_panel(item : model) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+  run_stateful_component(
     item,
-    runtime_tree,
-    fn(owner) component_root("lab", "panel", fn() render_lab_panel(owner, runtime_tree)))
+    fn(owner) component_root("lab", "panel", fn() render_lab_panel(owner)))
 
 pub fun handle_lab_click(payload : string, owner : model) : <lab_action_effect,local_state_read,local_state_write,div> maybe<model>
   route_lab_click(payload, owner)

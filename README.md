@@ -126,6 +126,12 @@ component call. Explicit scope/path/tree access is reserved for framework code
 and the small amount of feature coordination that must address a component
 outside its render function.
 
+Feature render and panel APIs do not receive or return the runtime tree. The app
+boundary owns it through `runtime_frame`, and `run_runtime_render(...)` threads
+it through component runners. Parent views also avoid inspecting child stores;
+state needed by a parent should be promoted to domain state instead of read
+back from a child's local cell.
+
 Simple named state primitives still exist for experiments, but new business
 components should prefer a typed store when state can be changed by user
 events. This keeps updates action-shaped, replayable, and compatible with
@@ -231,7 +237,7 @@ diffing, and patch planning remain in Koka.
 - `explore/react/renderer.kk`: rendering, diffing, and patch planning.
 - `demo/*`: application shell, features, actions, stores, and workflows.
 - `demo/runtimeframe.kk`: pairs the domain model with the framework runtime tree
-  at the app boundary.
+  and runs render/action transitions at the app boundary.
 - `runtime/*`: DOM and system FFI only.
 - `src/main.js`: Vite host, event bridges, HMR, and snapshot persistence.
 

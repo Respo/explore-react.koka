@@ -10,8 +10,8 @@ import explore/react/core
 import explore/react/state
 
 fun app_harness_render(previous_owner : maybe<model>, frame : runtime_frame) : <div> component_harness
-  val (next_model, next_runtime_tree, tree, effects, registry) = render_app_with_runtime(previous_owner, runtime_frame/owner(frame), runtime_frame/runtime_tree(frame), Nil)
-  Component_harness(next_model, tree, effects, registry, next_runtime_tree)
+  val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) render_app_with_runtime(previous_owner, owner, Nil))
+  Component_harness(runtime_frame/owner(next_frame), tree, effects, registry, runtime_frame/runtime_tree(next_frame))
 
 pub fun app_harness(owner : model) : <div> component_harness
   app_harness_render(Nothing, current_runtime_frame(owner, Nil))

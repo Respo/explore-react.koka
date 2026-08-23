@@ -46,7 +46,9 @@ pub fun ambient_filter_test() : <div> test_result
   Test_result("Ambient filter previews", "active=" ++ active_count.show ++ ", done=" ++ done_count.show, active_count == 2 && done_count == 1)
 
 pub fun registered_input_handler_test() : <div> test_result
-  val (next_item, next_runtime_tree, _panel_node, _effects, handlers) = run_todo_panel(initial_model(), Nil)
+  val (next_frame, _panel_node, _effects, handlers) = run_runtime_render(current_runtime_frame(initial_model(), Nil), run_todo_panel)
+  val next_item = runtime_frame/owner(next_frame)
+  val next_runtime_tree = runtime_frame/runtime_tree(next_frame)
   match find_registered_input_by_semantic(handlers, "draft-input")
     Just(found_input) -> {
       val updated = run_runtime_action(current_runtime_frame(next_item, next_runtime_tree), fn(current_owner) run_registered_input(found_input, "closure draft", current_owner)).owner
@@ -67,7 +69,7 @@ pub fun registered_click_handler_test() : <div> test_result
   val updated_task = match find(updated.tasks, fn(task_item) 2 == task/id(task_item))
     Just(found) -> found
     Nothing -> Task(2, "missing", False)
-  val editor_state = snapshot_task_editor(todo_harness_click_payload(started_harness, cancel_payload).runtime_tree, updated_task)
+  val editor_state = inspect_task_editor(todo_harness_click_payload(started_harness, cancel_payload).runtime_tree, updated_task)
   val in_registry = match find_registered_click(handlers, cancel_payload)
     Just(_) -> True
     Nothing -> False
@@ -127,7 +129,7 @@ pub fun vnode_click_payload_matches_route_test() : <div> test_result
   val cancel_node_payload = keyed_button_payload(tree, "2", "Cancel")
   val routed = todo_harness_click_payload(editing_harness, cancel_node_payload).owner
   val editor_state = match find(routed.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(todo_harness_click_payload(editing_harness, cancel_node_payload).runtime_tree, item)
+    Just(item) -> inspect_task_editor(todo_harness_click_payload(editing_harness, cancel_node_payload).runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   val in_registry = match find_registered_click(registry, cancel_node_payload)
     Just(_) -> True
@@ -149,7 +151,7 @@ pub fun harness_cancel_edit_test() : <div> test_result
   val cancel_payload = keyed_button_payload(editing_harness.tree, "2", "Cancel")
   val h1 = todo_harness_click_payload(editing_harness, cancel_payload)
   val editor_state = match find(h1.owner.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(h1.runtime_tree, item)
+    Just(item) -> inspect_task_editor(h1.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   Test_result(
     "Harness cancel via click payload",
@@ -180,9 +182,23 @@ pub fun harness_multi_step_test() : <div> test_result
   // Step 2: cancel the task edit via click payload
   val h2 = todo_harness_click_payload(h1, keyed_button_payload(h1.tree, "2", "Cancel"))
   val editor_state = match find(h2.owner.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(h2.runtime_tree, item)
+    Just(item) -> inspect_task_editor(h2.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   Test_result(
     "Harness multi-step input then click",
     "draft=" ++ h2.owner.draft ++ ", notice=" ++ h2.owner.notice ++ ", editing=" ++ task_editor_state/editing(editor_state).show,
     h2.owner.draft == "step1 draft" && h2.owner.notice == "Cancelled local task edit." && not(task_editor_state/editing(editor_state)))
+
+pub fun app_runtime_preserves_child_store_test() : <div> test_result
+  with with_test_browser(False, "T+0")
+  val h0 = app_harness(initial_model())
+  val h1 = app_harness_click_payload(h0, keyed_button_payload(h0.tree, "2", "Edit"))
+  val input_channel = keyed_input_channel(h1.tree, "2", "task-draft-2")
+  val h2 = app_harness_input_channel(h1, input_channel, "draft through app runtime")
+  val editor_state = match find(h2.owner.tasks, fn(item) 2 == task/id(item))
+    Just(item) -> inspect_task_editor(h2.runtime_tree, item)
+    Nothing -> Task_editor_state(False, "")
+  Test_result(
+    "App runtime preserves child store",
+    "editing=" ++ editor_state.editing.show ++ ", draft=" ++ editor_state.draft,
+    editor_state.editing && editor_state.draft == "draft through app runtime")

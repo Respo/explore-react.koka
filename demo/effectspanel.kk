@@ -66,5 +66,5 @@ fun effects_panel(item : model, results : list<test_result>) : effects_view_effe
     div(cases, class = "case-grid"),
   ], title = "Effects", note = effects_panel_note(item.route_name), key = "effects", class_name = "effects-panel")
 
-pub fun run_effects_panel(item : model, results : list<test_result>) : <div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_stateful_component(item, Nil, fn(owner, _next_tree) owner, fn(owner) component_root("effects", "panel", fn() effects_panel(owner, results)))
+pub fun run_effects_panel(item : model, results : list<test_result>) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+  run_stateful_component(item, fn(owner) component_root("effects", "panel", fn() effects_panel(owner, results)))

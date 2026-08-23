@@ -57,10 +57,10 @@ pub fun todo_edit_local_state_test() : <div> test_result
     Just(item) -> item.title
     Nothing -> "missing"
   val started_task = match find(started.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(started_harness.runtime_tree, item)
+    Just(item) -> inspect_task_editor(started_harness.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   val saved_task = match find(saved.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(saved_harness.runtime_tree, item)
+    Just(item) -> inspect_task_editor(saved_harness.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   val local_entries = count_entries(saved_harness.runtime_tree)
   Test_result(
@@ -112,7 +112,7 @@ pub fun start_edit_focus_test() : <div> test_result
     Just(item) -> "task-draft-" ++ task/id(item).show
     Nothing -> "missing"
   val local = match find(rendered.tasks, fn(item) 2 == task/id(item))
-    Just(item) -> snapshot_task_editor(started_harness.runtime_tree, item)
+    Just(item) -> inspect_task_editor(started_harness.runtime_tree, item)
     Nothing -> Task_editor_state(False, "")
   val focused_editor = any(effects, fn(item) scheduled_effect/path(item) == expected)
   val has_focus_marker = vnode_has_attr_value(panel_node, "data-k-effect", expected_marker)

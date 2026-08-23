@@ -105,13 +105,15 @@ pub fun dialog_overlay_effect_path() : string
 pub fun dialog_overlay_branch_path() : string
   component_local_path("overlays", "dialog")
 
-pub fun reconcile_dialog_runtime_tree(previous_owner : maybe<model>, next_owner : model, tree : list<state_entry>) : <div> list<state_entry>
-  if not(dialog_is_open(next_owner.dialog)) then
-    clear_state_branch(tree, dialog_overlay_branch_path())
-  else
-    match previous_owner
-      Just(previous) -> if previous.dialog.kind.show_kind == next_owner.dialog.kind.show_kind then tree else clear_state_branch(tree, dialog_overlay_branch_path())
-      Nothing -> tree
+pub fun reconcile_dialog_runtime(previous_owner : maybe<model>, next_owner : model) : <component_runtime,div> ()
+  val tree = current_component_state_entries()
+  val next_tree = if not(dialog_is_open(next_owner.dialog)) then
+      clear_state_branch(tree, dialog_overlay_branch_path())
+    else
+      match previous_owner
+        Just(previous) -> if previous.dialog.kind.show_kind == next_owner.dialog.kind.show_kind then tree else clear_state_branch(tree, dialog_overlay_branch_path())
+        Nothing -> tree
+  replace_component_state_entries(next_tree)
 
 pub fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
   component_root("overlays", "dialog", fn() {
@@ -127,9 +129,5 @@ pub fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
     dialog/render_dialog_overlay(current, overlay_spec(current, prompt_input, submit_enter), Dialog_overlay_controls(close_overlay, primary_action, submit_action))
   })
 
-pub fun run_dialog_overlay(owner : model, tree : list<state_entry>) : <div> (model, list<state_entry>, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  val (next_owner, next_tree, overlay_node, pending_effects, handlers) = run_stateful_component_with_tree(
-    owner,
-    tree,
-    fn(current_owner) render_dialog_overlay(current_owner))
-  (next_owner, next_tree, overlay_node, pending_effects, handlers)
+pub fun run_dialog_overlay(owner : model) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
+  run_stateful_component(owner, fn(current_owner) render_dialog_overlay(current_owner))

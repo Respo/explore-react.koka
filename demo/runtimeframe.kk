@@ -11,3 +11,11 @@ pub fun current_runtime_frame(owner : model, runtime_tree : list<state_entry>) :
 pub fun run_runtime_action<e>(frame : runtime_frame, action : (model) -> <local_state_read,local_state_write,div|e> model) : <div|e> runtime_frame
   val (next_owner, next_tree) = run_local_action(runtime_frame/runtime_tree(frame), fn() action(runtime_frame/owner(frame)))
   Runtime_frame(next_owner, next_tree)
+
+pub fun run_runtime_render<a,e::E>(
+  frame : runtime_frame,
+  render : (model) -> <component_runtime,div> (model, a, list<scheduled_effect>, event_registry<model,e>)
+) : <div> (runtime_frame, a, list<scheduled_effect>, event_registry<model,e>)
+  val (rendered, next_tree) = with_component_runtime(runtime_frame/runtime_tree(frame), fn() render(runtime_frame/owner(frame)))
+  val (next_owner, result, effects, registry) = rendered
+  (Runtime_frame(next_owner, next_tree), result, effects, registry)
