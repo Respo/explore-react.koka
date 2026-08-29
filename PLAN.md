@@ -52,6 +52,15 @@
 - `src/main.js` 在事件后合并保存，并在 HMR replacement、dispose、`pagehide` 前 flush；
 - 同一 snapshot 同时支持开发时 JS 替换和普通页面的 localStorage 恢复。
 
+### Unified action observation
+
+- domain action 与 component store action 共用 `action_envelope`；
+- envelope 只包含 `source + target + schema + version + payload`，不捕获 closure；
+- typed dispatch 自动发出 observation，组件调用点不额外传 logger；
+- runtime 可选择 capture 或 discard，browser host 当前输出同一条有序 action stream；
+- tests 已覆盖一次 Todo edit 中 `domain -> component` 的顺序与双向 codec 校验；
+- 当前语义是 intent observation，不自动持久化或 replay 外部副作用。
+
 ## 公共 API 分层
 
 ### 业务组件优先使用
@@ -102,12 +111,13 @@ clear_store_state(scope, spec)
 - 评估是否提供框架级 codec combinators，减少 feature 手写 encode/decode；
 - 保持 decoder 失败时回退 initial state，不让单个坏 entry 阻断 boot。
 
-### 2. 统一 action observation
+### 2. 定义 replay 与权限策略
 
-- 让 app action 与 component store action 可以进入统一的可选日志；
-- 日志只记录 serializable envelope，不捕获 closure；
-- 为 tests、devtools 和 agents 提供相同的 inspect/replay 输入；
-- 明确 replay 时 browser effects 的处理策略，避免重复执行外部副作用。
+- 为可安全 replay 的纯 action 增加显式 metadata，不从 codec 存在性推断；
+- 外部 effect action 默认只允许 inspect，replay 需要 capability/permission；
+- 定义 confirmation、request、timer 等 effect 的 recorded response 与去重策略；
+- action log persistence 与 component-state snapshot 分开版本和保留周期；
+- devtools/agents 只能通过已注册 codec 解码和投递，不能写 raw state tree。
 
 ### 3. 进一步精简 feature 辅助函数
 

@@ -12,6 +12,7 @@ import demo/view
 import demo/tests
 import library/bridge
 import library/route
+import explore/react/action
 import explore/react/state
 
 noinline val root_id_ref : ref<global,string> = unsafe-total { ref("app") }
@@ -48,6 +49,14 @@ fun log_registry_warnings(messages : list<string>) : _e ()
     Cons(message, rest) -> {
       browser_log("[explore-react listener] " ++ message)
       log_registry_warnings(rest)
+  }
+
+fun log_observed_actions(actions : list<action_envelope>) : _e ()
+  match actions
+    Nil -> ()
+    Cons(action, rest) -> {
+      browser_log("[explore-react action] " ++ action.source ++ ":" ++ action.target ++ " " ++ action.schema ++ "@" ++ action.version.show ++ " " ++ action.payload)
+      log_observed_actions(rest)
     }
 
 fun commit(frame : runtime_frame) : _e ()
@@ -65,25 +74,29 @@ fun commit(frame : runtime_frame) : _e ()
   log_registry_warnings(event_registry_semantic_warnings(previous_handlers, next_handlers))
   run_pending_effects(pending_effects)
 
-fun next_click_frame(payload : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> runtime_frame
+fun next_click_frame(payload : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> (runtime_frame, list<action_envelope>)
   match find_registered_click(handlers, payload)
-    Just(found_click) -> run_runtime_action(frame, fn(current_owner) with_browser(fn() run_registered_click(found_click, current_owner)))
-    Nothing -> run_runtime_action(frame, fn(owner) with_browser(fn() controller/dispatch_click(payload, owner)))
+    Just(found_click) -> run_runtime_action_observed(frame, fn(current_owner) with_browser(fn() run_registered_click(found_click, current_owner)))
+    Nothing -> run_runtime_action_observed(frame, fn(owner) with_browser(fn() controller/dispatch_click(payload, owner)))
 
-fun next_input_frame(channel : string, value : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> runtime_frame
+fun next_input_frame(channel : string, value : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> (runtime_frame, list<action_envelope>)
   match find_registered_input(handlers, channel)
-    Just(found_input) -> run_runtime_action(frame, fn(current_owner) run_registered_input(found_input, value, current_owner))
-    Nothing -> run_runtime_action(frame, fn(owner) with_browser(fn() controller/dispatch_input(channel, value, owner)))
+    Just(found_input) -> run_runtime_action_observed(frame, fn(current_owner) run_registered_input(found_input, value, current_owner))
+    Nothing -> run_runtime_action_observed(frame, fn(owner) with_browser(fn() controller/dispatch_input(channel, value, owner)))
 
 fun dispatch_click(payload : string) : _e ()
   val frame = !frame_ref
   val handlers = !handlers_ref
-  commit(next_click_frame(payload, frame, handlers))
+  val (next_frame, actions) = next_click_frame(payload, frame, handlers)
+  log_observed_actions(actions)
+  commit(next_frame)
 
 fun dispatch_input(channel : string, value : string) : _e ()
   val frame = !frame_ref
   val handlers = !handlers_ref
-  commit(next_input_frame(channel, value, frame, handlers))
+  val (next_frame, actions) = next_input_frame(channel, value, frame, handlers)
+  log_observed_actions(actions)
+  commit(next_frame)
 
 pub fun dispatch_click_bridge(payload : string) : _e ()
   dispatch_click(payload)

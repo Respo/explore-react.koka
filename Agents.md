@@ -162,6 +162,16 @@ input_text(
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
 
+## Action observation 约定
+
+- domain action 与 component store action 统一编码为 `action_envelope`，字段为 `source`、`target`、`schema`、`version`、`payload`。
+- typed dispatch 必须在 reducer/workflow 前调用 `emit_action(...)`；调用时使用 labelled arguments，让 source/target/codec/action 的含义清楚可见。
+- component store 由 `use_store(...)` / `dispatch_store(...)` 自动发 observation，业务 view 不重复埋点。
+- app/runtime 边界通过 `run_runtime_action_observed(...)` 获取有序 action 列表；不需要观察的测试或内部调用使用 `run_runtime_action(...)`。
+- observation 表示“已发送 intent”，不表示 reducer 成功或外部 effect 已提交。confirm 拒绝的 action 仍可被观察。
+- 未建立权限、effect response 和幂等策略前，不自动 replay，也不把 action log 混入 component-state snapshot。
+- 新增 domain action 时，codec 与 action/reducer 放在同一 feature 模块，并覆盖 schema/version/payload 的 round-trip 测试。
+
 ## Element 调用约定
 
 - element 的主要内容保持第一个位置参数：容器传 `list<vnode>`，文本元素传 `string`。

@@ -1,5 +1,6 @@
 module demo/lab/state
 
+import explore/react/action
 import explore/react/state
 
 pub struct incident_local_state(expanded : bool, draft : string)
@@ -56,5 +57,5 @@ fun incident_scope_path(incident_id : int) : string
 pub fun current_incident_local_state(incident_id : int) : <local_state_read,div> incident_local_state
   current_store_state(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""))
 
-pub fun dispatch_incident_local_action(incident_id : int, action : incident_local_action) : <local_state_write,div> ()
+pub fun dispatch_incident_local_action(incident_id : int, action : incident_local_action) : <action_observation,local_state_write,div> ()
   dispatch_store(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""), action)
