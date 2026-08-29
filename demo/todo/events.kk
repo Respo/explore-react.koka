@@ -3,6 +3,7 @@ module demo/todo/events
 import demo/model
 import demo/todo/state
 import library/maybe
+import explore/react/action
 import explore/react/core
 import explore/react/state
 
@@ -17,6 +18,48 @@ pub type task_item_action
   Cancel_task
   Toggle_task
   Remove_task
+
+fun encode_todo_action(action : todo_action) : string
+  match action
+    Add_task -> "a"
+    Set_filter(filter_name) -> "f" ++ filter_name
+    Clear_completed -> "c"
+
+fun decode_todo_action(version : int, payload : string) : maybe<todo_action>
+  if version != 1 then Nothing
+  else if payload == "a" then Just(Add_task)
+  else if payload == "c" then Just(Clear_completed)
+  else if payload != "" && payload.head == "f" then Just(Set_filter(payload.tail))
+  else Nothing
+
+pub val todo_action_codec : action_codec<todo_action> = Action_codec(
+  schema = "todo/action",
+  version = 1,
+  decode = decode_todo_action,
+  encode = encode_todo_action)
+
+fun encode_task_item_action(action : task_item_action) : string
+  match action
+    Edit_task -> "e"
+    Save_task -> "s"
+    Cancel_task -> "c"
+    Toggle_task -> "t"
+    Remove_task -> "r"
+
+fun decode_task_item_action(version : int, payload : string) : maybe<task_item_action>
+  if version != 1 then Nothing
+  else if payload == "e" then Just(Edit_task)
+  else if payload == "s" then Just(Save_task)
+  else if payload == "c" then Just(Cancel_task)
+  else if payload == "t" then Just(Toggle_task)
+  else if payload == "r" then Just(Remove_task)
+  else Nothing
+
+pub val task_item_action_codec : action_codec<task_item_action> = Action_codec(
+  schema = "todo/task-action",
+  version = 1,
+  decode = decode_task_item_action,
+  encode = encode_task_item_action)
 
 fun append_tasks(tasks : list<task>, item : task) : <div> list<task>
   tasks ++ [item]
@@ -51,6 +94,7 @@ fun todo_handle_clear_completed(owner : model, panel_key : string) : <browser_ho
     owner(notice = "Clear completed cancelled.")
 
 pub fun dispatch_todo_action(action : todo_action, owner : model, panel_key : string = "panel") : <browser_event_effect,div> model
+  emit_action(source = "domain", target = "todo", codec = todo_action_codec, action = action)
   match action
     Add_task -> todo_add_task(owner)
     Set_filter(filter_name) -> owner(filter_name = filter_name, notice = "Primary list switched to `" ++ filter_name ++ "`.")
@@ -63,6 +107,7 @@ pub fun dispatch_task_item_action(
   panel_key : string = "panel"
 ) : <browser_event_effect,div> model
   val tid = task/id(item)
+  emit_action(source = "domain", target = "todo/tasks/" ++ tid.show, codec = task_item_action_codec, action = action)
   match action
     Edit_task -> {
       audit("Opened local edit state for task #" ++ tid.show)

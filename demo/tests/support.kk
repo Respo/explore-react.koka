@@ -12,6 +12,7 @@ import demo/todo/viewmodel
 import library/bridge
 import library/route
 import library/search
+import explore/react/action
 import explore/react/core
 import explore/react/state
 
@@ -73,7 +74,7 @@ pub fun capture_waits(action : () -> <browser_host|e> string) : e (string, list<
     fun wait_ms(delay) waits := Cons(delay, waits)
   action()
 
-pub fun capture_workflow<a,e>(action : () -> <browser_host|e> a) : e (a, list<int>, list<string>)
+pub fun capture_workflow<a,e>(action : () -> <action_observation,browser_host|e> a) : e (a, list<int>, list<string>)
   var waits := Nil
   var audits := Nil
   with return(result) (result, waits, audits)
@@ -85,6 +86,7 @@ pub fun capture_workflow<a,e>(action : () -> <browser_host|e> a) : e (a, list<in
     fun fetch_lab_snapshot() mock_lab_snapshot()
     fun post_lab_reply(incident_id, message) mock_lab_reply(incident_id, message)
     fun now_label() "T+120"
+  with fun observe_action(_envelope) ()
   action()
 
 pub fun capture_audits(action : () -> <browser_host|e> model) : e (model, list<string>)
@@ -100,7 +102,7 @@ pub fun capture_audits(action : () -> <browser_host|e> model) : e (model, list<s
     fun now_label() "T+0"
   action()
 
-pub fun capture_bridge<a,e>(action : () -> <browser_host,request_bridge_resource|e> a) : e (a, list<string>, list<string>)
+pub fun capture_bridge<a,e>(action : () -> <action_observation,browser_host,request_bridge_resource|e> a) : e (a, list<string>, list<string>)
   var requests := Nil
   var audits := Nil
   with return(result) (result, requests, audits)
@@ -113,12 +115,13 @@ pub fun capture_bridge<a,e>(action : () -> <browser_host,request_bridge_resource
     fun post_lab_reply(incident_id, message) mock_lab_reply(incident_id, message)
     fun now_label() "T+120"
   with fun request_bridge_resource(payload, delay) requests := Cons(payload ++ "@" ++ delay.show, requests)
+  with fun observe_action(_envelope) ()
   action()
 
 pub fun bridge_base_model() : model
   initial_model()(route_name = normalize_route("lab"))
 
-pub fun bridge_click(owner : model, payload : string) : <browser_host,request_bridge_resource,div> model
+pub fun bridge_click(owner : model, payload : string) : <action_observation,browser_host,request_bridge_resource,div> model
   val (next, _runtime_tree) = run_local_action(Nil, fn() {
     match route_lab_click(payload, owner)
       Just(result) -> result
@@ -262,7 +265,7 @@ pub fun todo_harness_render(frame : runtime_frame) : <div> component_harness
 pub fun todo_harness(owner : model) : <div> component_harness
   todo_harness_render(current_runtime_frame(owner, Nil))
 
-fun run_harness_action<e>(h : component_harness, action : (model) -> <local_state_read,local_state_write,div|e> model) : <div|e> runtime_frame
+fun run_harness_action<e>(h : component_harness, action : (model) -> <action_observation,local_state_read,local_state_write,div|e> model) : <div|e> runtime_frame
   run_runtime_action(current_runtime_frame(h.owner, h.runtime_tree), action)
 
 // Fire a locally-registered click by semantic name; re-render via render_fn.

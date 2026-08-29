@@ -2,9 +2,12 @@ module demo/tests/todocases
 
 import library/bridge
 import demo/model
+import demo/runtimeframe
 import demo/seed
 import demo/tests/support
+import demo/todo/events
 import demo/todo/state
+import explore/react/action
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
@@ -14,19 +17,21 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
   val scope_key = "task-editor"
   val scope_name = component_local_path(scope_group, scope_key)
   val initial = Task_editor_state(False, "Initial")
-  val (_before, tree, _effects) = run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
+  val (first_run, first_actions) = capture_actions(fn() run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
     val (current, dispatch) = use_store(task_editor_store, initial = initial)
     dispatch(Begin_edit("Draft | with separator"))
     current
-  }))
+  })))
+  val (_before, tree, _effects) = first_run
   val current = read_store_state(tree, scope_name, task_editor_store, initial)
   val restored = read_store_state(decode_state_snapshot(encode_state_snapshot(tree)), scope_name, task_editor_store, initial)
-  val (_sequential_before, sequential_tree, _sequential_effects) = run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
+  val (sequential_run, _sequential_actions) = capture_actions(fn() run_local_state(Nil, fn() feature_root(group = scope_group, key = scope_key, render = fn() {
     val (_current, dispatch) = use_store(task_editor_store, initial = initial)
     dispatch(Begin_edit("Sequential draft"))
     dispatch(Finish_edit)
     ()
-  }))
+  })))
+  val (_sequential_before, sequential_tree, _sequential_effects) = sequential_run
   val sequential = read_store_state(sequential_tree, scope_name, task_editor_store, initial)
   val message = encode_store_action(scope_name, task_editor_store, Change_draft("Next | draft"))
   val action_roundtrip = match decode_store_action(task_editor_store, message)
@@ -40,10 +45,43 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
     entry.schema == "todo/task-editor" &&
     entry.version == 1
   })
+  val observed_store_action = match first_actions
+    [observed] -> observed.source == "component" && observed.target == scope_name && observed.schema == "todo/task-editor-action" && observed.payload == "bDraft | with separator"
+    _ -> False
   Test_result(
     "Todo editor uses typed store protocol",
     "editing=" ++ current.editing.show ++ ", draft=" ++ current.draft ++ ", action=" ++ message.schema ++ "@" ++ message.version.show,
-    current.editing && current.draft == "Draft | with separator" && restored.draft == current.draft && not(sequential.editing) && sequential.draft == "Sequential draft" && is-empty(decode_state_snapshot("bad%|schema|1|payload")) && action_roundtrip && version_guard && versioned_cell)
+    current.editing && current.draft == "Draft | with separator" && restored.draft == current.draft && not(sequential.editing) && sequential.draft == "Sequential draft" && is-empty(decode_state_snapshot("bad%|schema|1|payload")) && action_roundtrip && version_guard && versioned_cell && observed_store_action)
+
+pub fun unified_action_observation_test() : <div> test_result
+  with with_test_browser(False, "T+0")
+  val owner = initial_model()
+  match find(owner.tasks, fn(item) task/id(item) == 2)
+    Nothing -> Test_result("Domain and component actions share one envelope", "task #2 missing", False)
+    Just(item) -> {
+      val (next_frame, actions) = run_runtime_action_observed(current_runtime_frame(owner, Nil), fn(current_owner) dispatch_task_item_action(Edit_task, item, current_owner))
+      val editor = inspect_task_editor(runtime_frame/runtime_tree(next_frame), item)
+      val expected_target = component_child_path(component_local_path("todo", "panel"), "tasks", task/id(item).show)
+      val valid_actions = match actions
+        [domain_action, component_action] -> {
+          val domain_decodes = match decode_action(task_item_action_codec, domain_action)
+            Just(Edit_task) -> True
+            _ -> False
+          val component_decodes = match decode_store_action(task_editor_store, component_action)
+            Just(Begin_edit(title)) -> title == task/title(item)
+            _ -> False
+          domain_action.source == "domain" &&
+          domain_action.target == "todo/tasks/2" &&
+          component_action.source == "component" &&
+          component_action.target == expected_target &&
+          domain_decodes && component_decodes
+        }
+        _ -> False
+      Test_result(
+        "Domain and component actions share one envelope",
+        "actions=" ++ length(actions).show ++ ", target=" ++ expected_target ++ ", editing=" ++ editor.editing.show,
+        valid_actions && editor.editing)
+    }
 
 pub fun todo_edit_local_state_test() : <div> test_result
   with with_test_browser(False, "T+0")

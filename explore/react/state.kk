@@ -1,5 +1,6 @@
 module explore/react/state
 
+import explore/react/action
 import explore/react/core
 
 pub effect local_state_read
@@ -50,10 +51,8 @@ pub struct state_entry(path : string, schema : string, version : int, payload : 
 
 // A component store keeps state and actions typed inside business code. Only
 // state entries and action messages cross the type-erased runtime boundary.
-pub struct action_codec<a>(schema : string, version : int, decode : (int, string) -> maybe<a>, encode : (a) -> string)
-pub struct state_action(target : string, schema : string, version : int, payload : string)
 pub struct store_spec<s,a>(name : string, state_codec : state_codec<s>, action_codec : action_codec<a>, reduce : (s, a) -> s)
-pub alias store_dispatch<a> = (a) -> <local_state_write,div> ()
+pub alias store_dispatch<a> = (a) -> <action_observation,local_state_write,div> ()
 
 inline extern snapshot_escape(text : string) : string
   js inline "encodeURIComponent(#1)"
@@ -117,21 +116,21 @@ fun named_listener_slot(scope_base : string, kind : dom_event_kind, name : strin
   State_slot(join_slot_path(join_slot_path(join_slot_path(scope_base, "listeners"), dom_event_kind_name(kind)), normalize_slot_name(name)))
 
 pub val string/state_codec : state_codec<string> = State_codec(
-  "respo/string",
-  1,
-  fn(version, payload) if version == 1 then Just(payload) else Nothing,
-  fn(value) value)
+  schema = "respo/string",
+  version = 1,
+  decode = fn(version, payload) if version == 1 then Just(payload) else Nothing,
+  encode = fn(value) value)
 
 pub val bool/state_codec : state_codec<bool> = State_codec(
-  "respo/bool",
-  1,
-  fn(version, payload) {
+  schema = "respo/bool",
+  version = 1,
+  decode = fn(version, payload) {
     if version != 1 then Nothing
     else if payload == "true" then Just(True)
     else if payload == "false" then Just(False)
     else Nothing
   },
-  fn(value) if value then "true" else "false")
+  encode = fn(value) if value then "true" else "false")
 
 pub fun run_registered_click<s,e::E>(item : registered_click<s,e>, owner : s) : <div|e> s
   item.run.(owner)
@@ -323,29 +322,33 @@ pub fun state_pair<a>(name : string, initial : a, ?state_codec : state_codec<a>)
   use_named_state_pair(local_named_state_slot(name), initial)
 
 // Reducer-backed local state follows the familiar `(state, dispatch)` shape.
-// The runtime still stores one typed, versioned cell behind that small surface.
+// Action observation stays inside dispatch, so component definitions keep the
+// familiar reducer pair without exposing a framework-specific binding record.
 pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_state_read,div> (s, store_dispatch<a>)
+  val scope = current_hook_scope_name()
   val entry_slot = local_named_state_slot(spec.name)
   val codec = spec.state_codec
   val current = use_named_state(entry_slot, codec, initial)
-  (current, fn(action) update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action)))
+  (current, fn(action) {
+    emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
+    update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action))
+  })
 
 // Store access outside a component render still speaks in typed state/actions.
 // Scope and serialization stay inside the framework boundary.
 pub fun current_store_state<s,a>(scope : string, spec : store_spec<s,a>, initial : s) : <local_state_read,div> s
   use_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial)
 
-pub fun dispatch_store<s,a>(scope : string, spec : store_spec<s,a>, initial : s, action : a) : <local_state_write,div> ()
+pub fun dispatch_store<s,a>(scope : string, spec : store_spec<s,a>, initial : s, action : a) : <action_observation,local_state_write,div> ()
+  emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
   update_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial, fn(latest) spec.reduce.(latest, action))
 
-pub fun encode_store_action<s,a>(target : string, spec : store_spec<s,a>, action : a) : state_action
-  val codec = spec.action_codec
-  State_action(target, codec.schema, codec.version, codec.encode.(action))
+pub fun encode_store_action<s,a>(target : string, spec : store_spec<s,a>, action : a) : action_envelope
+  encode_action(source = "component", target = target, codec = spec.action_codec, action = action)
 
-pub fun decode_store_action<s,a>(spec : store_spec<s,a>, message : state_action) : maybe<a>
-  val codec = spec.action_codec
-  if message.schema != codec.schema then Nothing
-  else codec.decode.(message.version, message.payload)
+pub fun decode_store_action<s,a>(spec : store_spec<s,a>, message : action_envelope) : maybe<a>
+  if message.source != "component" then Nothing
+  else decode_action(spec.action_codec, message)
 
 pub fun read_store_state<s,a>(tree : list<state_entry>, scope_name : string, spec : store_spec<s,a>, initial : s) : <div> s
   read_named_local_state(tree, scope_name, spec.name, initial, spec.state_codec)
@@ -413,13 +416,13 @@ pub fun on_action_input<s,a,e::E>(name : string, action : (string) -> a, dispatc
 
 // Common reducer-backed controls only emit a typed component action and leave
 // the owner unchanged. These helpers keep that event plumbing out of views.
-pub fun on_store_click<s,a,e::E>(name : string, action : a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
+pub fun on_store_click<s,a,e::E>(name : string, action : a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<action_observation,local_state_write|e>>,div> listener
   on_local_click(name, fn(owner) {
     dispatch(action)
     owner
   })
 
-pub fun on_store_input<s,a,e::E>(name : string, action : (string) -> a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<local_state_write|e>>,div> listener
+pub fun on_store_input<s,a,e::E>(name : string, action : (string) -> a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<action_observation,local_state_write|e>>,div> listener
   on_local_input(name, fn(value, owner) {
     dispatch(action(value))
     owner

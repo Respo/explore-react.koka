@@ -11,6 +11,7 @@ import demo/todo/events
 import demo/todo/state
 import demo/todo/view
 import demo/todo/viewmodel
+import explore/react/action
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
@@ -87,18 +88,25 @@ pub fun timer_simulation_test() : <div> test_result
 
 pub fun route_subroute_normalization_test() : <div> test_result
   with with_test_browser(False, "10:00:00")
-  val lab_route = match handle_route_click(route_action_payload(Navigate("lab-search")), initial_model())
-    Just(result) -> result.route_name
-    Nothing -> "missing"
-  val effects_route = match handle_route_click(route_action_payload(Navigate("effects-dialogs")), initial_model())
-    Just(result) -> result.route_name
-    Nothing -> "missing"
+  val (routes, actions) = capture_actions(fn() {
+    val lab_route = match handle_route_click(route_action_payload(Navigate("lab-search")), initial_model())
+      Just(result) -> result.route_name
+      Nothing -> "missing"
+    val effects_route = match handle_route_click(route_action_payload(Navigate("effects-dialogs")), initial_model())
+      Just(result) -> result.route_name
+      Nothing -> "missing"
+    (lab_route, effects_route)
+  })
+  val (lab_route, effects_route) = routes
   val legacy_lab = normalize_route("lab")
   val legacy_effects = normalize_route("effects")
+  val observed = match actions
+    [lab_action, effects_action] -> lab_action.schema == "app/route-action" && effects_action.schema == "app/route-action"
+    _ -> False
   Test_result(
     "Route subpages normalize",
     "lab=" ++ lab_route ++ ", effects=" ++ effects_route ++ ", legacy=" ++ legacy_lab ++ "/" ++ legacy_effects,
-    lab_route == "lab-search" && effects_route == "effects-dialogs" && legacy_lab == "lab-board" && legacy_effects == "effects-core")
+    lab_route == "lab-search" && effects_route == "effects-dialogs" && legacy_lab == "lab-board" && legacy_effects == "effects-core" && observed)
 
 pub fun route_bar_click_is_local_test() : <div> test_result
   with with_test_browser(False, "T+0")

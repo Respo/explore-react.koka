@@ -4,6 +4,7 @@ import library/bridge
 import library/dialog
 import library/route
 import library/search
+import explore/react/action
 import explore/react/state
 
 pub type incident_severity
@@ -47,7 +48,7 @@ pub alias snapshot_host_effect = <browser_host>
 pub alias sync_host_effect = <browser_host>
 pub alias reply_host_effect = <browser_host>
 pub alias lab_action_effect = <browser_host,request_bridge_resource>
-pub alias browser_event_effect = <browser_host,request_bridge_resource,local_state_read,local_state_write>
+pub alias browser_event_effect = <action_observation,browser_host,request_bridge_resource,local_state_read,local_state_write>
 
 pub struct task
   id : int
@@ -101,14 +102,22 @@ pub fun tasks_for(filter_name : string, tasks : list<task>) : <div> list<task>
   with val current_filter = filter_name
   visible_tasks(tasks)
 
-pub fun dispatch_route_action(action : route_action, item : model) : <div> model
-  item(route_name = normalize_route(route_action_target(action)))
+pub val route_action_codec : action_codec<route_action> = Action_codec(
+  schema = "app/route-action",
+  version = 1,
+  decode = fn(version, payload) if version == 1 then decode_route_action(payload) else Nothing,
+  encode = route_action_payload)
 
-pub fun handle_route_click(payload : string, item : model) : <div> maybe<model>
+pub fun dispatch_route_action(action : route_action, item : model) : <action_observation,div> model
+  val route_name = normalize_route(route_action_target(action))
+  emit_action(source = "domain", target = "app/route", codec = route_action_codec, action = action)
+  item(route_name = route_name)
+
+pub fun handle_route_click(payload : string, item : model) : <action_observation,div> maybe<model>
   decode_route_action(payload).map(fn(action) dispatch_route_action(action, item))
 
 // Route changes remain data-only; render-time hooks now decide whether to execute browser effects.
-pub fun reduce_click(payload : string, item : model) : <browser_host,div> model
+pub fun reduce_click(payload : string, item : model) : <action_observation,browser_host,div> model
   match handle_route_click(payload, item)
     Just(next_item) -> next_item
     Nothing -> item(notice = "Unknown action: " ++ payload)

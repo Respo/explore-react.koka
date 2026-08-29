@@ -37,7 +37,7 @@ pub fun route_action_target(action : route_action) : string
   match action
     Navigate(route_name) -> route_name
 
-pub fun decode_route_action(payload : string) : <div> maybe<route_action>
+pub fun decode_route_action(payload : string) : maybe<route_action>
   if payload == route_action_payload(Navigate("overview")) then Just(Navigate("overview"))
   else if payload == route_action_payload(Navigate("todo")) then Just(Navigate("todo"))
   else if payload == route_action_payload(Navigate("lab")) then Just(Navigate("lab"))
@@ -52,6 +52,3 @@ pub fun decode_route_action(payload : string) : <div> maybe<route_action>
   else if payload == route_action_payload(Navigate("effects-timer")) then Just(Navigate("effects-timer"))
   else if payload == route_action_payload(Navigate("checks")) then Just(Navigate("checks"))
   else Nothing
-
-pub fun route_click_target(payload : string) : <div> maybe<string>
-  decode_route_action(payload).map(fn(action) normalize_route(route_action_target(action)))

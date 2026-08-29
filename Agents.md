@@ -145,6 +145,7 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
 - 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
 - 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
+- `Store_spec(...)`、`State_codec(...)`、`Action_codec(...)` 的定义统一使用 labelled fields，显式写出 `name/schema/version/decode/encode/reduce`，不要依赖难以辨认的位置参数顺序。
 - scope/path/slot/tree 属于 framework/runtime 细节；业务 view 只声明 keyed boundary，不手工拼 path。
 - 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
 - feature component 自己持有稳定的 `feature_root(...)`，签名返回 `app_view vnode`，并用 labelled `key` 隔离 local store、effect、listener 与 DOM marker；domain props 是否共享由调用方决定。不要暴露 runtime 四元组或新增 `run_*_panel` adapter。
@@ -179,6 +180,16 @@ button(
 ```
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
+
+## Action observation 约定
+
+- domain action 与 component store action 统一编码为 `action_envelope`，字段为 `source`、`target`、`schema`、`version`、`payload`。
+- typed dispatch 必须在 reducer/workflow 前调用 `emit_action(...)`；调用时使用 labelled arguments，让 source/target/codec/action 的含义清楚可见。
+- component store 由 `use_store(...)` / `dispatch_store(...)` 自动发 observation，业务 view 不重复埋点。
+- app/runtime 边界通过 `run_runtime_action_observed(...)` 获取有序 action 列表；不需要观察的测试或内部调用使用 `run_runtime_action(...)`。
+- observation 表示“已发送 intent”，不表示 reducer 成功或外部 effect 已提交。confirm 拒绝的 action 仍可被观察。
+- 未建立权限、effect response 和幂等策略前，不自动 replay，也不把 action log 混入 component-state snapshot。
+- 新增 domain action 时，codec 与 action/reducer 放在同一 feature 模块，并覆盖 schema/version/payload 的 round-trip 测试。
 
 ## Element 调用约定
 

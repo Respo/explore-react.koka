@@ -13,6 +13,7 @@ import demo/lab/view
 import demo/tests/appharness
 import demo/tests/support
 import explore/react/core
+import explore/react/action
 import explore/react/state
 
 pub fun lab_local_routing_test() : <div> test_result
@@ -124,10 +125,11 @@ pub fun workflow_sync_test() : <div> test_result
 
 pub fun workflow_reply_test() : <div> test_result
   val base = initial_model()(route_name = normalize_route("lab"))
-  val (prepared, prepared_runtime_tree) = run_local_action(Nil, fn() {
+  val (prepared_result, _prepared_actions) = capture_actions(fn() run_local_action(Nil, fn() {
     dispatch_incident_local_action(102, Change_incident_draft("Shift replay traffic onto the cache-safe queue."))
     base
-  })
+  }))
+  val (prepared, prepared_runtime_tree) = prepared_result
   val ((next, next_runtime_tree), waits, _audits) = capture_workflow(fn() run_local_action(prepared_runtime_tree, fn() send_reply(prepared, 102)))
   val total = sum(waits)
   val lab = next.lab
