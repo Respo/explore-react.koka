@@ -140,24 +140,43 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 
 组件交互状态以 **typed store + serializable actions** 为默认方案。它保留 React reducer 的简单心智模型，同时满足 Koka 严格类型、HMR 和 snapshot 恢复需求。
 
-- 业务组件用 `use_store(spec, initial = ...)` 读取一个 typed binding，状态从 `binding.current` 解构。
-- UI 事件优先用 `on_store_click(...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
+- 业务组件用 `(state, dispatch) = use_store(spec, initial = ...)` 读取 reducer pair，不额外暴露 binding record。
+- UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
+- domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
+- 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
 - 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
-- scope/path/slot/tree 属于 framework/runtime 细节。列表组件用 `components(items, group = ..., key = ..., render = ...)` 建立稳定 identity。
+- `Store_spec(...)`、`State_codec(...)`、`Action_codec(...)` 的定义统一使用 labelled fields，显式写出 `name/schema/version/decode/encode/reduce`，不要依赖难以辨认的位置参数顺序。
+- scope/path/slot/tree 属于 framework/runtime 细节；业务 view 只声明 keyed boundary，不手工拼 path。
+- 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
+- feature component 自己持有稳定的 `feature_root(...)`，签名返回 `app_view vnode`，并用 labelled `key` 隔离 local store、effect、listener 与 DOM marker；domain props 是否共享由调用方决定。不要暴露 runtime 四元组或新增 `run_*_panel` adapter。
+- 只有真正支持多实例隔离的 feature 才公开 `key`；app-owned singleton（例如全局 Dialog overlay）使用固定 identity，不提供只隔离一部分 runtime surface 的伪多实例参数。
+- feature 外协调 child store 时必须传递相同的 feature key；scope path 只在 state 模块内部计算，业务 view 不调用 raw scope/path API。
+- VDOM sibling key 与 DOM effect marker 分别使用 `feature_node_key(...)` / `feature_dom_marker(...)` 派生，不在每个组件文件重复实现默认 key 兼容与多实例前缀规则。
+- 整棵 app tree 只在集成层调用一次 `run_component(owner, group = ..., key = ..., render = fn(owner) ...)`，不要让 layout 手工合并 effects/registries。
+- 高层 view component 保持一个主要 domain value 位置参数，其余 callback/config props 使用 labelled arguments，例如 `on_input = ...`、`on_submit = ...`、`on_select = ...`。
 - 组件外协调状态时用 `current_store_state(...)` / `dispatch_store(...)` 这类 typed API；不要在业务模块复制 tree 编解码。
 - action 必须可序列化，方便事件日志、恢复、回放，以及后续 agents/actions/store 工具链。
 
 推荐形态：
 
 ```koka
-val editor = use_store(
+val (Task_editor_state(editing, draft), dispatch_editor) = use_store(
   task_editor_store,
   initial = Task_editor_state(False, item.title))
-val Task_editor_state(editing, draft) = editor.current
 
 input_text(
   draft,
-  input = on_store_input("draft-input", editor, Change_draft))
+  input = on_store_input(
+    "draft-input",
+    action = Change_draft,
+    dispatch = dispatch_editor))
+
+button(
+  "Save",
+  click = on_action_click(
+    "save-edit",
+    action = Save_task,
+    dispatch = dispatch))
 ```
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
@@ -191,7 +210,8 @@ div([
 - component runtime tree 不放回业务 `model`；app 边界通过 `runtime_frame` 持有。
 - feature/view API 不得接收或返回 `list<state_entry>`；render transition 统一通过 `run_runtime_render(...)`。
 - parent component 不读取 child local store 做业务汇总；确实需要上层观察的数据提升到 domain model，纯调试统计放到 framework inspector。
-- component runners 必须串行操作 runtime host，不要把一个 stateful runner 嵌套在另一个 runner 的 render callback 内。
+- 每次 app render 只安装一个 stateful component runtime；feature 通过 scoped vnode component 在同一 handler 内组合。
+- scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
 - snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。

@@ -5,20 +5,18 @@ import library/route
 import explore/react/core
 import explore/react/state
 
-alias route_bar_effect = <hook_scope,listener_registry<model,browser_event_effect>,div>
-
-fun route_button(label : string, route_name : string, active : bool) : route_bar_effect vnode
+fun route_button(label : string, route_name : string, active : bool) : app_view vnode
   val class_name = if active then "button route-tab route-tab-active" else "button route-tab"
-  button(label, class = class_name, click = on_local_click("nav-" ++ route_name, fn(owner : model) dispatch_route_action(Navigate(route_name), owner)))
+  button(label, class = class_name, click = on_action_click("nav-" ++ route_name, action = Navigate(route_name), dispatch = dispatch_route_action))
 
-fun lab_subroutes(active_route : string) : route_bar_effect vnode
+fun lab_subroutes(active_route : string) : app_view vnode
   div([
     route_button("Board", "lab-board", active_route == "lab-board"),
     route_button("Search", "lab-search", active_route == "lab-search"),
     route_button("Bridge", "lab-bridge", active_route == "lab-bridge"),
   ], class = "route-bar route-sub-bar")
 
-fun effects_subroutes(active_route : string) : route_bar_effect vnode
+fun effects_subroutes(active_route : string) : app_view vnode
   div([
     route_button("Core", "effects-core", active_route == "effects-core"),
     route_button("Dialogs", "effects-dialogs", active_route == "effects-dialogs"),
@@ -27,7 +25,7 @@ fun effects_subroutes(active_route : string) : route_bar_effect vnode
     route_button("Timer", "effects-timer", active_route == "effects-timer"),
   ], class = "route-bar route-sub-bar")
 
-pub fun route_bar(item : model) : route_bar_effect vnode
+pub fun route_bar(item : model) : app_view vnode
   val active_route = item.route_name
   val active_section = route_section(active_route)
   val secondary_bar =

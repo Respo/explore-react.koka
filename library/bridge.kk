@@ -149,16 +149,16 @@ pub fun render_bridge_fallback(key : string, title : string, note : string, clas
     ], class = "bridge-fallback-bars"),
   ], key = key, class = "bridge-fallback " ++ class_name)
 
-fun bridge_case_button(item : bridge_case, requested_case : string, visible_case : string, dispatch_case : string -> listener) : <div> vnode
+fun bridge_case_button<e::E>(item : bridge_case, requested_case : string, visible_case : string, on_select : string -> <div|e> listener) : <div|e> vnode
   val case_name = bridge_case/name(item)
   val class_name =
     if case_name == visible_case then "button button-active"
     else if case_name == requested_case then "button button-primary bridge-button-pending"
     else "button"
-  button(bridge_case/label(item), class = class_name, click = dispatch_case(case_name))
+  button(bridge_case/label(item), class = class_name, click = on_select(case_name))
 
-pub fun render_bridge_case_buttons(items : list<bridge_case>, requested_case : string, visible_case : string, dispatch_case : string -> listener) : <div> list<vnode>
-  map(items, fn(item) bridge_case_button(item, requested_case, visible_case, dispatch_case))
+pub fun render_bridge_case_buttons<e::E>(items : list<bridge_case>, requested_case : string, visible_case : string, on_select : string -> <div|e> listener) : <div|e> list<vnode>
+  map(items, fn(item) bridge_case_button(item, requested_case, visible_case, on_select))
 
 fun bridge_transition_banner(requested_case : string, visible_case : string) : vnode
   div([
@@ -182,7 +182,7 @@ fun bridge_detail_node(case_item : bridge_case, detail_status : string) : <div> 
       ul(map-indexed(bridge_case/detail_lines(case_item), fn(index, line) li_text(line, key = "bridge-detail-" ++ index.show, class = "activity-item")), class = "activity-list"),
     ], class = "bridge-detail-card")
   else
-    render_bridge_fallback("bridge-detail-fallback", "Nested fallback", "Shell is visible, but the diagnostic trace is still suspended through the browser callback bridge.", "bridge-detail-fallback")
+    render_bridge_fallback("bridge-detail-fallback", title = "Nested fallback", note = "Shell is visible, but the diagnostic trace is still suspended through the browser callback bridge.", class_name = "bridge-detail-fallback")
 
 fun bridge_shell_node(case_item : bridge_case, requested_case : string, visible_case : string, shell_status : string, detail_status : string) : <div> vnode
   val is_refreshing = shell_status == "refreshing"
@@ -222,7 +222,7 @@ fun bridge_shell_node(case_item : bridge_case, requested_case : string, visible_
 pub fun render_bridge_stage(selected_case : maybe<bridge_case>, requested_note : string, requested_case : string, visible_case : string, shell_status : string, detail_status : string) : <div> vnode
   match selected_case
     Just(case_item) -> if visible_case == "" && shell_status != "ready" then
-      render_bridge_fallback("bridge-shell-fallback", "Outer fallback", requested_note, "bridge-shell-fallback")
+      render_bridge_fallback("bridge-shell-fallback", title = "Outer fallback", note = requested_note, class_name = "bridge-shell-fallback")
     else
       bridge_shell_node(case_item, requested_case, visible_case, shell_status, detail_status)
     Nothing -> div([
@@ -230,7 +230,7 @@ pub fun render_bridge_stage(selected_case : maybe<bridge_case>, requested_note :
       p("Select a case to trigger a browser callback that resolves the shell and nested diagnostics in two stages.", class = "case-detail"),
     ], class = "bridge-empty")
 
-pub fun render_bridge_panel(demo : suspense_bridge_demo, render_summary_chip : (string, string) -> vnode, dispatch_case : string -> listener) : <div> vnode
+pub fun render_bridge_panel<e::E>(demo : suspense_bridge_demo, summary : (string, string) -> vnode, on_select : string -> <div|e> listener) : <div|e> vnode
   val requested_case = demo.requested_case
   val visible_case = demo.visible_case
   val selected_case = if visible_case == "" then requested_case else visible_case
@@ -244,12 +244,12 @@ pub fun render_bridge_panel(demo : suspense_bridge_demo, render_summary_chip : (
         p("This keeps stale shell content visible while a browser callback resolves the next case, then reveals nested detail through a second fallback.", class = "case-detail"),
       ], class = "stack"),
       div([
-        render_summary_chip("Requested", requested_case),
-        render_summary_chip("Visible", if visible_case == "" then "<fallback>" else visible_case),
-        render_summary_chip("Shell", demo.shell_status),
-        render_summary_chip("Detail", demo.detail_status),
+        summary("Requested", requested_case),
+        summary("Visible", if visible_case == "" then "<fallback>" else visible_case),
+        summary("Shell", demo.shell_status),
+        summary("Detail", demo.detail_status),
       ], class = "summary-row bridge-meta"),
     ], class = "bridge-panel-head"),
-    div(render_bridge_case_buttons(bridge_demo_cases(), requested_case, visible_case, dispatch_case), class = "button-row bridge-case-row"),
-    render_bridge_stage(bridge_case_by_name(selected_case), requested_note, requested_case, visible_case, demo.shell_status, demo.detail_status),
+    div(render_bridge_case_buttons(bridge_demo_cases(), requested_case = requested_case, visible_case = visible_case, on_select = on_select), class = "button-row bridge-case-row"),
+    render_bridge_stage(bridge_case_by_name(selected_case), requested_note = requested_note, requested_case = requested_case, visible_case = visible_case, shell_status = demo.shell_status, detail_status = demo.detail_status),
   ], key = "lab-bridge", class = "bridge-panel")

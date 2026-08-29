@@ -15,6 +15,7 @@ pub type lab_action
   Load_board
   Run_sync
   Load_bridge_case(case_name : string)
+  Change_search_query(value : string)
   Submit_search
   Search_for(query : string)
   Send_reply(incident_id : int)
@@ -24,6 +25,7 @@ fun encode_lab_domain_action(action : lab_action) : string
     Load_board -> "b"
     Run_sync -> "y"
     Load_bridge_case(case_name) -> "l" ++ case_name
+    Change_search_query(value) -> "i" ++ value
     Submit_search -> "s"
     Search_for(query) -> "q" ++ query
     Send_reply(incident_id) -> "r" ++ incident_id.show
@@ -34,6 +36,7 @@ fun decode_lab_domain_action(version : int, payload : string) : maybe<lab_action
   else if payload == "y" then Just(Run_sync)
   else if payload == "s" then Just(Submit_search)
   else if payload != "" && payload.head == "l" then Just(Load_bridge_case(payload.tail))
+  else if payload != "" && payload.head == "i" then Just(Change_search_query(payload.tail))
   else if payload != "" && payload.head == "q" then Just(Search_for(payload.tail))
   else if payload != "" && payload.head == "r" then parse-int(payload.tail).map(Send_reply)
   else Nothing
@@ -49,6 +52,7 @@ pub fun lab_action_payload(action : lab_action) : string
     Load_board -> "lab-load"
     Run_sync -> "lab-sync"
     Load_bridge_case(case_name) -> bridge_load_payload(case_name)
+    Change_search_query(_value) -> search_query_channel()
     Submit_search -> search_submit_payload()
     Search_for(query) -> search_pick_payload(query)
     Send_reply(incident_id) -> "lab-send-" ++ incident_id.show
@@ -68,15 +72,16 @@ fun incident_id_from_toggle(payload : string, items : list<incident>) : <div> ma
 fun incident_id_from_send(payload : string, items : list<incident>) : <div> maybe<int>
   find(items, fn(item) payload == "lab-send-" ++ incident/id(item).show).map(incident/id)
 
-pub fun dispatch_lab_action(action : lab_action, owner : model) : <action_observation,lab_action_effect,local_state_read,local_state_write,div> model
+pub fun dispatch_lab_action(action : lab_action, owner : model, panel_key : string = "panel") : <action_observation,lab_action_effect,local_state_read,local_state_write,div> model
   emit_action(source = "domain", target = "lab", codec = lab_action_codec, action = action)
   match action
     Load_board -> load_snapshot(owner)
     Run_sync -> perform_sync(owner)
     Load_bridge_case(case_name) -> start_bridge_case(owner, case_name)
+    Change_search_query(value) -> set_search_query(owner, value)
     Submit_search -> start_search(owner)
     Search_for(query) -> pick_search_case(owner, query)
-    Send_reply(incident_id) -> send_reply(owner, incident_id)
+    Send_reply(incident_id) -> send_reply(owner, incident_id, panel_key = panel_key)
 
 fun decode_lab_action(payload : string, owner : model) : <div> maybe<lab_action>
   if payload == "lab-load" then
@@ -90,23 +95,23 @@ fun decode_lab_action(payload : string, owner : model) : <div> maybe<lab_action>
     decode_search_pick_payload(payload).map(Search_for) ||
     incident_id_from_send(payload, owner.lab.incidents).map(Send_reply)
 
-pub fun route_lab_click(payload : string, owner : model) : <action_observation,lab_action_effect,local_state_read,local_state_write,div> maybe<model>
-  decode_lab_action(payload, owner).map(fn(action) dispatch_lab_action(action, owner)).or-else {
+pub fun route_lab_click(payload : string, owner : model, panel_key : string = "panel") : <action_observation,lab_action_effect,local_state_read,local_state_write,div> maybe<model>
+  decode_lab_action(payload, owner).map(fn(action) dispatch_lab_action(action, owner, panel_key = panel_key)).or-else {
     resolve_search_result(owner, payload).or-else {
       resolve_bridge_result(owner, payload).or-else {
         incident_id_from_toggle(payload, owner.lab.incidents).map(fn(target_id) {
-          dispatch_incident_local_action(target_id, Toggle_incident)
+          dispatch_incident_local_action(target_id, Toggle_incident, panel_key = panel_key)
           owner
         })
       }
     }
   }
 
-pub fun route_lab_input(channel : string, value : string, owner : model) : <action_observation,bridge_request_effect,local_state_write,div> maybe<model>
+pub fun route_lab_input(channel : string, value : string, owner : model, panel_key : string = "panel") : <action_observation,bridge_request_effect,local_state_write,div> maybe<model>
   if channel == search_query_channel() then
     Just(set_search_query(owner, value))
   else
     find_lab_draft_channel(channel, owner.lab.incidents).map(fn(target_id) {
-      dispatch_incident_local_action(target_id, Change_incident_draft(value))
+      dispatch_incident_local_action(target_id, Change_incident_draft(value), panel_key = panel_key)
       owner
     })

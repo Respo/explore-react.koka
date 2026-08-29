@@ -81,7 +81,7 @@ fun next_click_frame(payload : string, frame : runtime_frame, handlers : event_r
 
 fun next_input_frame(channel : string, value : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> (runtime_frame, list<action_envelope>)
   match find_registered_input(handlers, channel)
-    Just(found_input) -> run_runtime_action_observed(frame, fn(current_owner) run_registered_input(found_input, value, current_owner))
+    Just(found_input) -> run_runtime_action_observed(frame, fn(current_owner) with_browser(fn() run_registered_input(found_input, value, current_owner)))
     Nothing -> run_runtime_action_observed(frame, fn(owner) with_browser(fn() controller/dispatch_input(channel, value, owner)))
 
 fun dispatch_click(payload : string) : _e ()

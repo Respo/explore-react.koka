@@ -12,7 +12,7 @@ pub type task_editor_action
   Finish_edit
   Cancel_edit(title : string)
 
-fun update_task_editor(current : task_editor_state, action : task_editor_action) : task_editor_state
+fun reduce_task_editor(current : task_editor_state, action : task_editor_action) : task_editor_state
   match action
     Begin_edit(title) -> Task_editor_state(True, title)
     Change_draft(value) -> Task_editor_state(True, value)
@@ -46,30 +46,35 @@ fun decode_task_editor_action(version : int, payload : string) : maybe<task_edit
   else Nothing
 
 pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = Store_spec(
-  "editor",
-  State_codec("todo/task-editor", 1, decode_task_editor, encode_task_editor),
-  Action_codec("todo/task-editor-action", 1, decode_task_editor_action, encode_task_editor_action),
-  update_task_editor)
-
-fun todo_panel_scope_path() : string
-  component_local_path("todo", "panel")
+  name = "editor",
+  state_codec = State_codec(
+    schema = "todo/task-editor",
+    version = 1,
+    decode = decode_task_editor,
+    encode = encode_task_editor),
+  action_codec = Action_codec(
+    schema = "todo/task-editor-action",
+    version = 1,
+    decode = decode_task_editor_action,
+    encode = encode_task_editor_action),
+  reduce = reduce_task_editor)
 
 fun task_component_key(item : task) : string
   task/id(item).show
 
-fun task_scope_path(item : task) : string
-  component_child_path(todo_panel_scope_path(), "tasks", task_component_key(item))
+fun task_scope_path(item : task, panel_key : string) : string
+  component_child_path(component_local_path("todo", panel_key), "tasks", task_component_key(item))
 
-pub fun current_task_editor(item : task) : <local_state_read,div> task_editor_state
-  current_store_state(task_scope_path(item), task_editor_store, Task_editor_state(False, item.title))
+pub fun current_task_editor(item : task, panel_key : string = "panel") : <local_state_read,div> task_editor_state
+  current_store_state(task_scope_path(item, panel_key), task_editor_store, Task_editor_state(False, item.title))
 
-pub fun dispatch_task_editor(item : task, action : task_editor_action) : <action_observation,local_state_write,div> ()
-  dispatch_store(task_scope_path(item), task_editor_store, Task_editor_state(False, item.title), action)
+pub fun dispatch_task_editor(item : task, action : task_editor_action, panel_key : string = "panel") : <action_observation,local_state_write,div> ()
+  dispatch_store(task_scope_path(item, panel_key), task_editor_store, Task_editor_state(False, item.title), action)
 
-pub fun clear_task_editor(item : task) : <local_state_write,div> ()
-  clear_store_state(task_scope_path(item), task_editor_store)
+pub fun clear_task_editor(item : task, panel_key : string = "panel") : <local_state_write,div> ()
+  clear_store_state(task_scope_path(item, panel_key), task_editor_store)
 
-pub fun clear_done_task_editors(tasks : list<task>) : <local_state_write,div> ()
+pub fun clear_done_task_editors(tasks : list<task>, panel_key : string = "panel") : <local_state_write,div> ()
   foreach(tasks, fn(item)
-    if item.done then clear_task_editor(item) else ()
+    if item.done then clear_task_editor(item, panel_key = panel_key) else ()
   )

@@ -6,9 +6,6 @@ import runtime/dom
 import explore/react/core
 import explore/react/state
 
-alias dialog_view_effect = <hook_scope,hook_effects,listener_registry<model,browser_event_effect>,div>
-alias dialog_demo_effect = <hook_scope,listener_registry<model,browser_event_effect>,div>
-
 fun apply_dialog_update(owner : model, next_update : dialog_update) : <div> model
   owner(dialog = next_update.dialog, notice = next_update.notice)
 
@@ -45,7 +42,7 @@ pub fun handle_dialog_click(payload : string, owner : model) : <browser_host,div
     Just(open_dialog_demo(owner, kind = Dialog_drawer, title = "Drawer demo", message = "This side sheet keeps the background visible while secondary actions happen in a dedicated panel.", notice = "Opened drawer overlay demo."))
   else Nothing
 
-pub fun dialog_demo_case(owner : model) : dialog_demo_effect vnode
+pub fun dialog_demo_case(owner : model) : app_view vnode
   val current = owner.dialog
   val open_alert = on_local_click("open-alert", fn(next_owner : model) open_dialog_demo(next_owner, kind = Dialog_alert, title = "Alert demo", message = "A controlled alert surface rendered inside the app tree, similar to the explore-react demos in the MoonBit and Rust implementations.", notice = "Opened alert overlay demo."))
   val open_prompt = on_local_click("open-prompt", fn(next_owner : model) open_dialog_demo(next_owner, kind = Dialog_prompt, title = "Prompt demo", message = "Type 3-8 characters. This mimics a controlled prompt instead of delegating to a native browser API.", prompt_value = "explore-react", notice = "Opened prompt overlay demo."))
@@ -99,24 +96,8 @@ fun overlay_spec(current : dialog_demo, prompt_input_listener : listener, submit
     Dialog_dialog -> Dialog_overlay_spec("dialog-overlay-shell dialog-overlay-center", "dialog-overlay", "dialog-overlay-card", dialog_custom_body("dialog-custom", current), Footer_primary_with_cancel("Run dialog action"))
     _ -> Dialog_overlay_spec("dialog-overlay-shell dialog-overlay-drawer", "drawer-overlay", "dialog-overlay-card drawer-overlay-card", dialog_custom_body("drawer-custom", current), Footer_primary_with_cancel("Commit drawer"))
 
-pub fun dialog_overlay_effect_path() : string
-  component_effect_path("overlays", "dialog", "focus-dialog")
-
-pub fun dialog_overlay_branch_path() : string
-  component_local_path("overlays", "dialog")
-
-pub fun reconcile_dialog_runtime(previous_owner : maybe<model>, next_owner : model) : <component_runtime,div> ()
-  val tree = current_component_state_entries()
-  val next_tree = if not(dialog_is_open(next_owner.dialog)) then
-      clear_state_branch(tree, dialog_overlay_branch_path())
-    else
-      match previous_owner
-        Just(previous) -> if previous.dialog.kind.show_kind == next_owner.dialog.kind.show_kind then tree else clear_state_branch(tree, dialog_overlay_branch_path())
-        Nothing -> tree
-  replace_component_state_entries(next_tree)
-
-pub fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
-  component_root("overlays", "dialog", fn() {
+pub fun dialog_overlay(owner : model) : app_view vnode
+  feature_root("overlays", "dialog") {
     val current = owner.dialog
     val close_overlay = on_local_click("close-overlay", fn(next_owner : model) apply_dialog_update(next_owner, close_dialog(next_owner.dialog, result_note = "Overlay dismissed.", notice = "Closed the overlay demo.", log_line = "[close] overlay dismissed")))
     val primary_action = on_local_click("primary-action", fn(next_owner : model) dialog_primary_action(next_owner))
@@ -126,8 +107,5 @@ pub fun render_dialog_overlay(owner : model) : dialog_view_effect vnode
     state_effect(name = "focus-dialog", deps = [current.kind.show_kind, current.prompt_error, current.title], action = fn() {
       if dialog_is_open(current) then dom_focus(dialog_focus_marker(current)) else ()
     })
-    dialog/render_dialog_overlay(current, overlay_spec(current, prompt_input, submit_enter), Dialog_overlay_controls(close_overlay, primary_action, submit_action))
-  })
-
-pub fun run_dialog_overlay(owner : model) : <component_runtime,div> (model, vnode, list<scheduled_effect>, event_registry<model,browser_event_effect>)
-  run_stateful_component(owner, fn(current_owner) render_dialog_overlay(current_owner))
+    dialog/render_dialog_overlay(current, spec = overlay_spec(current, prompt_input, submit_enter), controls = Dialog_overlay_controls(close_overlay, primary_action, submit_action))
+  }

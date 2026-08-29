@@ -22,12 +22,13 @@ JavaScript hot replacement or be restored from `localStorage`.
 
 | React idea | This repo in Koka |
 | --- | --- |
-| function component | a plain function returning `vnode` |
-| keyed child component | `components(items, group=..., key=..., render=...)` |
-| component boundary | `component_root(...)` / `component_in(...)` |
-| local reducer | `use_store(spec, initial=...)` |
-| local dispatch | `binding.send(action)` or `on_store_*` |
-| app reducer/action | typed feature actions dispatched through the app runtime |
+| view function | a function returning an `app_view vnode` expression |
+| keyed component instance | `component(...)` / `components(...)` |
+| reusable persistent feature | an exported component owns `feature_root(...)` and may expose labelled `key`; app singletons keep a fixed identity |
+| app runtime | one `run_component(...)` call at the integration boundary |
+| local reducer | `(state, dispatch) = use_store(spec, initial=...)` |
+| local dispatch | `dispatch(action)` or `on_store_*` |
+| app reducer/action | `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` |
 | `useEffect`-like hook | `state_effect(name=..., deps=..., action=...)` |
 | Context-like value | a Koka `val` effect |
 | browser/service capability | a Koka `fun` effect |
@@ -43,34 +44,136 @@ Element content is positional. Common attributes and events are flat labelled
 arguments, so call sites do not need an `attrs` or `children` wrapper:
 
 ```koka
+val (Incident_local_state(expanded, draft), dispatch) =
+  use_store(incident_local_store, initial = Incident_local_state(False, ""))
+
 article([
   strong(item.title, class = "incident-title"),
   button(
     if expanded then "Collapse" else "Expand",
     class = "button",
-    click = on_store_click("toggle-expanded", local, Toggle_incident)),
+    click = on_store_click(
+      "toggle-expanded",
+      action = Toggle_incident,
+      dispatch = dispatch)),
   input_text(
     draft,
     class = "input incident-input",
-    input = on_store_input("draft-input", local, Change_incident_draft),
+    input = on_store_input(
+      "draft-input",
+      action = Change_incident_draft,
+      dispatch = dispatch),
     placeholder = "Local reply draft..."),
 ], key = "incident-" ++ iid.show, class = "incident-card")
 ```
 
+Public view components follow the same props rule as elements: one primary
+domain value stays positional, while callbacks and configuration are labelled.
+For example, Search exposes `on_input = ...`, `on_submit = ...`, and
+`on_select = ...`; it does not ask callers to manufacture raw DOM payloads or
+know which listener registry path the framework assigns.
+
+Component signatures use one application alias, `app_view`, instead of
+listing `hook_scope`, state-tree access, scheduled effects, and the listener
+registry in every view file. The alias hides runtime plumbing without weakening
+the type of the component body.
+
+A function call alone does not create component identity. A stateful reusable
+child is evaluated inside `component(...)` or `components(...)`; a persistent
+top-level feature establishes `feature_root(...)`. Pure view helpers can remain
+ordinary function calls because they do not need their own lifecycle.
+
+Component boundaries use Koka's trailing-lambda syntax—
+`feature_root("todo", key) { ... }` and `component("tasks", key) { ... }`—so
+lifecycle-bearing code is visually distinct from an ordinary view helper.
+Component props and element attributes remain flat labelled arguments.
+
 For repeated children, `components(...)` owns the keyed component boundary:
 
 ```koka
-div(
-  components(
-    lab.incidents,
-    group = "incidents",
-    key = fn(item) incident/id(item).show,
-    render = incident_card),
-  class = "incident-grid")
+fun incident_grid(lab : workflow_lab, panel_key : string) : app_view vnode
+  div(
+    components(
+      lab.incidents,
+      group = "incidents",
+      key = fn(item) incident/id(item).show,
+      render = fn(item) incident_card(item, panel_key = panel_key)),
+    class = "incident-grid")
 ```
 
 This is more than a shorter `map`: the `group + key` pair determines the stable
 scope used by the child component's state, effects, and named listeners.
+
+An exported feature component owns its stable absolute root and still composes
+as a `vnode` expression:
+
+```koka
+pub fun todo_panel(
+  panel_state : todo_panel_state,
+  key : string = "panel"
+) : app_view vnode
+  feature_root("todo", key) {
+    panel(
+      [...],
+      key = feature_node_key(group = "todo", key = key))
+  }
+```
+
+Layouts therefore compose components as ordinary values, without receiving or
+merging runtime tuples:
+
+```koka
+section([
+  route_bar(item),
+  todo_panel(todo_panel_state_of(item)),
+  lab_panel(item),
+])
+```
+
+The default key preserves the normal singleton path `todo/panel`. Rendering a
+second instance gives it an independent component runtime scope:
+
+```koka
+todo_panel(todo_panel_state_of(item), key = "compact")
+```
+
+That key isolates local stores, effects, listeners, and DOM effect markers.
+Domain data is still shared when both instances receive values derived from the
+same application model, just as two controlled React components can receive the
+same props. Any feature code that coordinates a child store outside its render
+function must carry the same feature key; raw scope paths stay inside the state
+module.
+
+`feature_node_key(group = ..., key = ...)` and
+`feature_dom_marker(group = ..., key = ..., name = ...)` centralize the matching
+VDOM/DOM naming rule. The default instance keeps its established browser names;
+additional instances receive a group-prefixed name automatically.
+
+Key segments use collision-free URI encoding. Existing non-empty slugs and
+numeric IDs keep their established runtime paths. Snapshots created with the
+older ambiguous encoding for empty, underscore-leading, or reserved-character
+keys fall back to the component's initial value once; current application keys
+are unaffected.
+
+Only the app integration boundary installs the runtime:
+
+```koka
+run_component(
+  item,
+  group = "app",
+  key = "root",
+  render = fn(owner) render_layout(owner, results))
+```
+
+The explicit `group + key` remains intentional. Unlike React, an ordinary Koka
+function call does not create a fiber identity that the runtime can recover
+implicitly across list reordering or hot replacement. Keeping feature roots
+absolute also preserves existing snapshot paths when a panel moves in the
+layout.
+
+The single runtime collects listeners and scheduled effects in component
+evaluation order (shell, active feature tree, then overlay). Components should
+not use cross-component effect ordering as a data dependency.
 
 ## Typed component stores
 
@@ -91,21 +194,40 @@ pub type task_editor_action
   Finish_edit
   Cancel_edit(title : string)
 
-fun update_task_editor(current : task_editor_state, action : task_editor_action)
+fun reduce_task_editor(current : task_editor_state, action : task_editor_action)
   match action
     Begin_edit(title) -> Task_editor_state(True, title)
     Change_draft(value) -> Task_editor_state(True, value)
     Finish_edit -> current(editing = False)
     Cancel_edit(title) -> Task_editor_state(False, title)
+
+pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = Store_spec(
+  name = "editor",
+  state_codec = State_codec(
+    schema = "todo/task-editor",
+    version = 1,
+    decode = decode_task_editor,
+    encode = encode_task_editor),
+  action_codec = Action_codec(
+    schema = "todo/task-editor-action",
+    version = 1,
+    decode = decode_task_editor_action,
+    encode = encode_task_editor_action),
+  reduce = reduce_task_editor)
 ```
 
-The component-facing call stays small:
+Store definitions use labelled fields deliberately. `name` owns runtime
+identity, `state_codec` owns snapshot compatibility, `action_codec` owns the
+observable wire action, and `reduce` is the pure transition. Avoid positional
+`Store_spec(...)`, `State_codec(...)`, and `Action_codec(...)` calls: they are
+shorter but make schema/version and encode/decode order too easy to misread.
+
+The component-facing call mirrors React's reducer pair:
 
 ```koka
-val editor = use_store(
+val (Task_editor_state(editing, draft), dispatch) = use_store(
   task_editor_store,
   initial = Task_editor_state(False, item.title))
-val Task_editor_state(editing, draft) = editor.current
 ```
 
 Controls can emit typed store actions without manually reading or writing the
@@ -114,11 +236,17 @@ runtime tree:
 ```koka
 input_text(
   draft,
-  input = on_store_input("draft-input", editor, Change_draft))
+  input = on_store_input(
+    "draft-input",
+    action = Change_draft,
+    dispatch = dispatch))
 
 button(
   "Expand",
-  click = on_store_click("toggle-expanded", local, Toggle_incident))
+  click = on_store_click(
+    "toggle-expanded",
+    action = Toggle_incident,
+    dispatch = dispatch))
 ```
 
 The codecs are defined once beside the store. They are not passed through every
@@ -126,9 +254,9 @@ component call. Explicit scope/path/tree access is reserved for framework code
 and the small amount of feature coordination that must address a component
 outside its render function.
 
-Feature render and panel APIs do not receive or return the runtime tree. The app
-boundary owns it through `runtime_frame`, and `run_runtime_render(...)` threads
-it through component runners. Parent views also avoid inspecting child stores;
+Feature render and panel APIs return only `vnode`. The app boundary owns the
+runtime tree through `runtime_frame`, and one `run_component(...)` pass collects
+state, scheduled effects, and listeners for the full tree. Parent views also avoid inspecting child stores;
 state needed by a parent should be promoted to domain state instead of read
 back from a child's local cell.
 
@@ -143,10 +271,17 @@ State and listener identity use stable component scopes. Listeners add an event
 kind and a semantic name, for example:
 
 ```koka
-on_local_click("save-edit", fn(owner) ...)
+on_action_click("save-edit", action = Save_task, dispatch = dispatch)
+on_action_input("change-query", action = Change_search_query, dispatch = dispatch)
+on_action_enter("save-edit", action = Save_task, dispatch = dispatch)
 on_local_input("draft-input", fn(value, owner) ...)
-on_local_enter("send-reply", fn(owner) ...)
 ```
+
+When an event only sends a typed domain action, `on_action_click(...)` and
+`on_action_input(...)` / `on_action_enter(...)` keep the action constructor,
+semantic listener name, and dispatch function visible without repeating a
+forwarding closure in every element. `on_local_*` remains the escape hatch for
+handlers with custom branching or direct model updates.
 
 At render time `run_event_registry(...)` collects typed Koka callbacks and
 returns small listener tokens to the VDOM. `render_node(...)` serializes those
@@ -158,10 +293,11 @@ conditional rendering safer without relying on listener call order.
 
 Store listeners are intentionally a narrower convenience layer:
 
-- `on_store_click(...)` emits one typed local action;
+- `on_store_click(...)` emits one typed local action through the store dispatch;
 - `on_store_input(...)` converts the input string into one typed local action;
-- `on_local_*` remains available when the event also changes the owner model or
-  invokes other effects.
+- `on_action_*` dispatches typed domain actions and can still expose reducer
+  effects;
+- `on_local_*` remains available when an event needs custom component logic.
 
 ## Serializable action observation
 

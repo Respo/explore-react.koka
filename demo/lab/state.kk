@@ -9,7 +9,7 @@ pub type incident_local_action
   Change_incident_draft(value : string)
   Finish_incident_reply
 
-fun update_incident_local_state(current : incident_local_state, action : incident_local_action) : incident_local_state
+fun reduce_incident_local_state(current : incident_local_state, action : incident_local_action) : incident_local_state
   match action
     Toggle_incident -> current(expanded = not(current.expanded))
     Change_incident_draft(value) -> current(draft = value)
@@ -40,22 +40,30 @@ fun decode_incident_local_action(version : int, payload : string) : maybe<incide
   else Nothing
 
 pub val incident_local_store : store_spec<incident_local_state,incident_local_action> = Store_spec(
-  "incident",
-  State_codec("lab/incident-local", 1, decode_incident_local_state, encode_incident_local_state),
-  Action_codec("lab/incident-local-action", 1, decode_incident_local_action, encode_incident_local_action),
-  update_incident_local_state)
+  name = "incident",
+  state_codec = State_codec(
+    schema = "lab/incident-local",
+    version = 1,
+    decode = decode_incident_local_state,
+    encode = encode_incident_local_state),
+  action_codec = Action_codec(
+    schema = "lab/incident-local-action",
+    version = 1,
+    decode = decode_incident_local_action,
+    encode = encode_incident_local_action),
+  reduce = reduce_incident_local_state)
 
-fun lab_panel_scope_path() : string
-  component_local_path("lab", "panel")
+fun lab_panel_scope_path(panel_key : string = "panel") : string
+  component_local_path("lab", panel_key)
 
 fun incident_component_key(incident_id : int) : string
   incident_id.show
 
-fun incident_scope_path(incident_id : int) : string
-  component_child_path(lab_panel_scope_path(), "incidents", incident_component_key(incident_id))
+fun incident_scope_path(incident_id : int, panel_key : string = "panel") : string
+  component_child_path(lab_panel_scope_path(panel_key), "incidents", incident_component_key(incident_id))
 
-pub fun current_incident_local_state(incident_id : int) : <local_state_read,div> incident_local_state
-  current_store_state(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""))
+pub fun current_incident_local_state(incident_id : int, panel_key : string = "panel") : <local_state_read,div> incident_local_state
+  current_store_state(incident_scope_path(incident_id, panel_key), incident_local_store, Incident_local_state(False, ""))
 
-pub fun dispatch_incident_local_action(incident_id : int, action : incident_local_action) : <action_observation,local_state_write,div> ()
-  dispatch_store(incident_scope_path(incident_id), incident_local_store, Incident_local_state(False, ""), action)
+pub fun dispatch_incident_local_action(incident_id : int, action : incident_local_action, panel_key : string = "panel") : <action_observation,local_state_write,div> ()
+  dispatch_store(incident_scope_path(incident_id, panel_key), incident_local_store, Incident_local_state(False, ""), action)
