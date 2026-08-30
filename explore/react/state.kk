@@ -182,15 +182,6 @@ pub val bool/state_codec : state_codec<bool> = State_codec(
   },
   encode = fn(value) if value then "true" else "false")
 
-pub fun run_registered_click<s,e::E>(item : registered_click<s,e>, owner : s) : <div|e> s
-  item.run.(owner)
-
-pub fun run_registered_input<s,e::E>(item : registered_input<s,e>, value : string, owner : s) : <div|e> s
-  item.run.(value, owner)
-
-pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
-  Event_registry(Nil, Nil, Nil)
-
 pub fun with_component_runtime<a,e>(tree : list<state_entry>, action : () -> <component_runtime|e> a) : e (a, list<state_entry>)
   var next_tree := tree
   with return(result) (result, next_tree)
@@ -198,9 +189,6 @@ pub fun with_component_runtime<a,e>(tree : list<state_entry>, action : () -> <co
     fun get_component_state_entries() next_tree
     fun set_component_state_entries(next_value) next_tree := next_value
   action()
-
-pub fun run_scheduled_effect(item : scheduled_effect) : io ()
-  item.run.()
 
 fun append_registered_click<s,e::E>(items : list<registered_click<s,e>>, item : registered_click<s,e>) : <div> list<registered_click<s,e>>
   match items
@@ -212,86 +200,15 @@ fun append_registered_input<s,e::E>(items : list<registered_input<s,e>>, item : 
     Nil -> [item]
     Cons(head, rest) -> Cons(head, append_registered_input(rest, item))
 
-fun append_messages(left : list<string>, right : list<string>) : <div> list<string>
-  match left
-    Nil -> right
-    Cons(head, rest) -> Cons(head, append_messages(rest, right))
-
-pub fun find_registered_click<s,e::E>(registry : event_registry<s,e>, target_id : string) : <div> maybe<registered_click<s,e>>
-  find_click_in_list(event_registry/clicks(registry), target_id)
-
 fun find_click_in_list<s,e::E>(items : list<registered_click<s,e>>, target_id : string) : <div> maybe<registered_click<s,e>>
   match items
     Nil -> Nothing
     Cons(item, rest) -> if registered_click/id(item) == target_id then Just(item) else find_click_in_list(rest, target_id)
 
-// Find the first registered click whose semantic name matches.
-// Useful in tests that know the handler name but not the generated slot path.
-pub fun find_registered_click_by_semantic<s,e::E>(registry : event_registry<s,e>, semantic : string) : <div> maybe<registered_click<s,e>>
-  find_click_by_semantic_in_list(event_registry/clicks(registry), semantic)
-
-fun find_click_by_semantic_in_list<s,e::E>(items : list<registered_click<s,e>>, semantic : string) : <div> maybe<registered_click<s,e>>
-  match items
-    Nil -> Nothing
-    Cons(item, rest) ->
-      if registered_click/semantic_name(item) == semantic then Just(item)
-      else find_click_by_semantic_in_list(rest, semantic)
-
-pub fun find_registered_input<s,e::E>(registry : event_registry<s,e>, target_id : string) : <div> maybe<registered_input<s,e>>
-  find_input_in_list(event_registry/inputs(registry), target_id)
-
 fun find_input_in_list<s,e::E>(items : list<registered_input<s,e>>, target_id : string) : <div> maybe<registered_input<s,e>>
   match items
     Nil -> Nothing
     Cons(item, rest) -> if registered_input/id(item) == target_id then Just(item) else find_input_in_list(rest, target_id)
-
-// Find the first registered input whose semantic name matches.
-pub fun find_registered_input_by_semantic<s,e::E>(registry : event_registry<s,e>, semantic : string) : <div> maybe<registered_input<s,e>>
-  find_input_by_semantic_in_list(event_registry/inputs(registry), semantic)
-
-fun find_input_by_semantic_in_list<s,e::E>(items : list<registered_input<s,e>>, semantic : string) : <div> maybe<registered_input<s,e>>
-  match items
-    Nil -> Nothing
-    Cons(item, rest) ->
-      if registered_input/semantic_name(item) == semantic then Just(item)
-      else find_input_by_semantic_in_list(rest, semantic)
-
-pub fun count_registered_clicks<s,e::E>(registry : event_registry<s,e>) : <div> int
-  count_click_items(event_registry/clicks(registry))
-
-fun count_click_items<s,e::E>(items : list<registered_click<s,e>>) : <div> int
-  match items
-    Nil -> 0
-    Cons(_, rest) -> 1 + count_click_items(rest)
-
-pub fun count_registered_inputs<s,e::E>(registry : event_registry<s,e>) : <div> int
-  count_input_items(event_registry/inputs(registry))
-
-fun count_input_items<s,e::E>(items : list<registered_input<s,e>>) : <div> int
-  match items
-    Nil -> 0
-    Cons(_, rest) -> 1 + count_input_items(rest)
-
-fun compare_click_semantics<s,e::E>(previous : list<registered_click<s,e>>, next : list<registered_click<s,e>>) : <div> list<string>
-  match next
-    Nil -> Nil
-    Cons(item, rest) ->
-      val tail = compare_click_semantics(previous, rest)
-      match find_click_in_list(previous, registered_click/id(item))
-        Just(found) -> if registered_click/semantic_name(found) == registered_click/semantic_name(item) then tail else Cons(semantic_drift_warning(registered_click/id(item), registered_click/semantic_name(found), registered_click/semantic_name(item)), tail)
-        Nothing -> tail
-
-fun compare_input_semantics<s,e::E>(previous : list<registered_input<s,e>>, next : list<registered_input<s,e>>) : <div> list<string>
-  match next
-    Nil -> Nil
-    Cons(item, rest) ->
-      val tail = compare_input_semantics(previous, rest)
-      match find_input_in_list(previous, registered_input/id(item))
-        Just(found) -> if registered_input/semantic_name(found) == registered_input/semantic_name(item) then tail else Cons(semantic_drift_warning(registered_input/id(item), registered_input/semantic_name(found), registered_input/semantic_name(item)), tail)
-        Nothing -> tail
-
-pub fun event_registry_semantic_warnings<s,e::E>(previous : event_registry<s,e>, next : event_registry<s,e>) : <div> list<string>
-  append_messages(compare_click_semantics(event_registry/clicks(previous), event_registry/clicks(next)), compare_input_semantics(event_registry/inputs(previous), event_registry/inputs(next)))
 
 fun state_value(tree : list<state_entry>, entry_slot : state_slot, fallback : a, ?state_codec : state_codec<a>) : <div> a
   match find_state(tree, state_slot/path(entry_slot))
@@ -810,54 +727,6 @@ fun effect_signature(deps : list<string>) : <div> string
 
 fun effect_entry(slot_item : state_slot, deps : list<string>) : <div> state_entry
   State_entry(state_slot/path(slot_item), "respo/effect", 1, effect_signature(deps))
-
-pub fun count_entries(tree : list<state_entry>) : <div> int
-  match tree
-    Nil -> 0
-    Cons(_, rest) -> 1 + count_entries(rest)
-
-fun encode_snapshot_entry(entry : state_entry) : string
-  snapshot_escape(entry.path) ++ "|" ++
-  snapshot_escape(entry.schema) ++ "|" ++
-  entry.version.show ++ "|" ++
-  snapshot_escape(entry.payload)
-
-fun append_snapshot_line(line : string, rest : string) : string
-  if rest == "" then line else line ++ "\n" ++ rest
-
-// Effect dependency signatures are render metadata. They are intentionally
-// rebuilt after HMR instead of being persisted with component state.
-pub fun encode_state_snapshot(tree : list<state_entry>) : <div> string
-  match tree
-    Nil -> ""
-    Cons(entry, rest) ->
-      val encoded_rest = encode_state_snapshot(rest)
-      if entry.schema == "respo/effect" then encoded_rest
-      else append_snapshot_line(encode_snapshot_entry(entry), encoded_rest)
-
-fun decode_snapshot_entry(line : string) : maybe<state_entry>
-  match split(line, "|")
-    [encoded_path, encoded_schema, version, encoded_payload] -> {
-      if not(snapshot_unescape_valid(encoded_path) && snapshot_unescape_valid(encoded_schema) && snapshot_unescape_valid(encoded_payload)) then Nothing
-      else {
-        val path = snapshot_unescape(encoded_path)
-        val schema = snapshot_unescape(encoded_schema)
-        if path == "" || schema == "" then Nothing
-        else parse-int(version).map(fn(value) State_entry(path, schema, value, snapshot_unescape(encoded_payload)))
-      }
-    }
-    _ -> Nothing
-
-fun decode_snapshot_lines(lines : list<string>) : list<state_entry>
-  match lines
-    Nil -> Nil
-    Cons(line, rest) ->
-      match decode_snapshot_entry(line)
-        Just(entry) -> Cons(entry, decode_snapshot_lines(rest))
-        Nothing -> decode_snapshot_lines(rest)
-
-pub fun decode_state_snapshot(snapshot : string) : list<state_entry>
-  if snapshot == "" then Nil else decode_snapshot_lines(split(snapshot, "\n"))
 
 fun require_hook_scope(scope_name : string, kind : string) : string
   scope_name

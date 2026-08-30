@@ -7,15 +7,19 @@
 第一次回到仓库时，优先按这个顺序走：
 
 1. 先看 `package.json` 里的脚本，确认日常入口还是 `yarn dev`、`yarn build`、`yarn test:koka`。
-2. 再看 `app.kk`，确认当前浏览器桥只暴露哪些 Koka 入口。
-3. 然后看 `explore/react/*` 和 `demo/*` 的边界：前者是库，后者是 demo 和业务。
-4. 开始改代码前，先跑一次 `yarn build`，确认自己不是站在坏状态上继续开发。
+2. 组件作者先看 `docs/quick-start.md` 与 `docs/component-authoring.md`；不要从 runtime snapshot 实现反推日常 API。
+3. 再看 `app.kk`，确认当前浏览器桥只暴露哪些 Koka 入口。
+4. 然后看 `explore/react/*` 和 `demo/*` 的边界：前者是库，后者是 demo 和业务。
+5. 开始改代码前，先跑一次 `yarn build`，确认自己不是站在坏状态上继续开发。
 
 ## 仓库结构
 
 - 仓库根目录：就是 Koka 源码根目录，编译时直接把 repo root 当成模块搜索根。
 - `app.kk`：浏览器入口，只暴露 boot、事件桥接和 runtime snapshot 导入导出。
-- `explore/react/*`：核心 VDOM、typed component store、listener registry、render、diff/patch。这里尽量保持通用。
+- `explore/react/core.kk`、`action.kk`、`state.kk`：component authoring surface；业务 view 只从这里获取 elements、actions、stores、keyed lifecycle 与 effects。
+- `explore/react/runtime.kk`：browser/app host 使用的 registered callback、scheduled effect 与 snapshot transport。
+- `explore/react/inspection.kk`：tests/devtools 使用的 VDOM、event registry 与 runtime entry 只读查询。
+- `explore/react/renderer.kk`：host/tests 使用的 render、diff 与 patch；不要导入业务 view。
 - `demo/*`：具体 demo、布局、组件、路由和测试辅助。
 - `demo/runtimeframe.kk`：app 边界的 runtime owner，同时持有业务 model 和框架 state tree。
 - `runtime/*`：只放 DOM 和系统边界的 FFI，不要把业务逻辑塞进来。
@@ -147,6 +151,8 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 ## 组件本地状态约定（typed store + actions）
 
 组件交互状态以 **typed store + serializable actions** 为默认方案。它保留 React reducer 的简单心智模型，同时满足 Koka 严格类型、HMR 和 snapshot 恢复需求。
+
+- 普通业务 view 只导入 `explore/react/core`、`explore/react/action`、`explore/react/state` 中实际需要的模块；不得导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。
 
 - 业务组件用 `(state, dispatch) = use_store(spec, initial = ...)` 读取 reducer pair，不额外暴露 binding record。
 - UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。

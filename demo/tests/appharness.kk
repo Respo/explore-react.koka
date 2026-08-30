@@ -8,6 +8,8 @@ import demo/tests/support
 import library/bridge
 import explore/react/core
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 fun app_harness_render(previous_owner : maybe<model>, frame : runtime_frame) : <div> component_harness
   val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) render_app_with_runtime(previous_owner, owner, Nil))

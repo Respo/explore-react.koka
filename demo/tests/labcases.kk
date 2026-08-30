@@ -15,6 +15,7 @@ import demo/tests/support
 import explore/react/core
 import explore/react/action
 import explore/react/state
+import explore/react/inspection
 
 pub fun lab_local_routing_test() : <div> test_result
   with with_test_browser(False, "T+120")

@@ -15,6 +15,8 @@ import library/search
 import explore/react/action
 import explore/react/core
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 pub struct test_result(name : string, detail : string, passed : bool)
 

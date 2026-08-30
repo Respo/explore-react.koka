@@ -6,6 +6,8 @@ import demo/todo/state
 import explore/react/action
 import explore/react/core
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 pub fun state_tree_test() : <div> test_result
   val incident_scope = "lab/incidents/101"

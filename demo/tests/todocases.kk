@@ -11,6 +11,8 @@ import explore/react/action
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 pub fun todo_editor_store_protocol_test() : <div> test_result
   val scope_group = "tests"

@@ -7,6 +7,29 @@ This repo explores a React-like component runtime in Koka, with Algebraic
 Effects used for browser capabilities, test substitution, component-local
 state, and event dispatch.
 
+## Start with component authoring
+
+Learn the normal path as four tasks; runtime ownership and snapshot transport
+are advanced integration topics, not prerequisites:
+
+1. **Elements:** write ordinary view functions with positional content and
+   labelled attributes/events.
+2. **Keyed components:** add `component(...)` / `components(...)` only when a
+   child needs stable lifecycle identity.
+3. **Typed stores/actions:** define a serializable action and use
+   `(state, dispatch) = use_store(spec, initial = ...)`.
+4. **Effects:** declare post-render work with `state_effect(...)`, and keep
+   browser/service capabilities as explicit Koka effects.
+
+Start with the bilingual [component quick start](docs/quick-start.md), then use
+the [one-page component author API](docs/component-authoring.md) as the normal
+reference. Persistent feature identity, recovery, and cross-domain/local
+transitions are introduced only when needed:
+
+- [component lifecycle](docs/component-lifecycle.md)
+- [store recovery](docs/store-recovery.md)
+- [action/store transitions](docs/action-store-transitions.md)
+
 The current design deliberately separates two kinds of state:
 
 - domain state lives in the application `model` and changes through typed
@@ -472,8 +495,14 @@ diffing, and patch planning remain in Koka.
 - `explore/react/action.kk`: serializable action codecs, envelopes, and the
   observation effect.
 - `explore/react/state.kk`: component scopes, typed stores, listeners, effects,
-  snapshots, and runtime handlers.
+  and lifecycle authoring.
+- `explore/react/runtime.kk`: host-only registered callback execution,
+  scheduled effects, and snapshot transport.
+- `explore/react/inspection.kk`: read-only VDOM/event-registry/runtime queries
+  for tests and devtools.
 - `explore/react/renderer.kk`: rendering, diffing, and patch planning.
+- `docs/quick-start.md` and `docs/component-authoring.md`: progressive
+  component tutorial and the compact preferred API.
 - `demo/*`: application shell, features, actions, stores, and workflows.
 - `demo/runtimeframe.kk`: pairs the domain model with the framework runtime tree
   and runs render/action transitions at the app boundary.
