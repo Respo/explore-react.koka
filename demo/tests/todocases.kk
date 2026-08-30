@@ -120,6 +120,38 @@ pub fun todo_edit_local_state_test() : <div> test_result
     "title=" ++ title ++ ", local=" ++ local_entries.show ++ ", editing=" ++ task_editor_state/editing(started_task).show,
     title == "Prototype local title edits before save" && task_editor_state/editing(started_task) && not(task_editor_state/editing(saved_task)))
 
+fun todo_scope_is_gone(tree : list<state_entry>, scope_name : string) : <div> bool
+  not(any(tree, fn(entry) {
+    entry.path == named_local_state_path(scope_name, "editor") ||
+    entry.path == named_local_effect_path(scope_name, "focus-editor") ||
+    (entry.schema == "respo/component-scope" && entry.payload == scope_name)
+  }))
+
+pub fun todo_child_lifecycle_cleanup_test() : <div> test_result
+  with with_test_browser(True, "T+0")
+  val task_one_scope = component_child_path(component_local_path("todo", "panel"), "tasks", "1")
+  val task_two_scope = component_child_path(component_local_path("todo", "panel"), "tasks", "2")
+  val h0 = todo_harness(initial_model())
+  val h1 = todo_harness_click_payload(h0, keyed_button_payload(h0.tree, "1", "Edit"))
+  val h2 = todo_harness_click_payload(h1, keyed_button_payload(h1.tree, "1", "Cancel"))
+  val h3 = todo_harness_click_payload(h2, keyed_button_payload(h2.tree, "2", "Edit"))
+  val h4 = todo_harness_click_payload(h3, keyed_button_payload(h3.tree, "2", "Cancel"))
+  val stores_created =
+    any(h4.runtime_tree, fn(entry) entry.path == named_local_state_path(task_one_scope, "editor")) &&
+    any(h4.runtime_tree, fn(entry) entry.path == named_local_state_path(task_two_scope, "editor"))
+  val h5 = harness_fire_named_click(h4, "clear-completed", todo_harness_render)
+  val completed_removed = not(any(h5.owner.tasks, fn(item) task/id(item) == 1))
+  val remaining_store_kept = any(h5.runtime_tree, fn(entry) entry.path == named_local_state_path(task_two_scope, "editor"))
+  val h6 = todo_harness_click_payload(h5, keyed_button_payload(h5.tree, "2", "Remove"))
+  val task_removed = not(any(h6.owner.tasks, fn(item) task/id(item) == 2))
+  val passed =
+    stores_created && completed_removed && todo_scope_is_gone(h5.runtime_tree, task_one_scope) && remaining_store_kept &&
+    task_removed && todo_scope_is_gone(h6.runtime_tree, task_two_scope)
+  Test_result(
+    "Removed Todo children release component state",
+    "created=" ++ stores_created.show ++ ", clear-done=" ++ completed_removed.show ++ ", remove=" ++ task_removed.show ++ ", entries=" ++ h6.runtime_tree.length.show,
+    passed)
+
 pub fun todo_edit_diff_test() : <div> test_result
   with with_test_browser(False, "T+0")
   val base_harness = todo_harness(initial_model())
