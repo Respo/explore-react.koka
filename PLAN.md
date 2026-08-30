@@ -193,6 +193,8 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ## GitHub 跟踪
 
+issue、PR 及影响结论的进度更新统一使用中英双语：标题采用 `中文 / English`，正文分别写成完整的 `# 中文` 与 `# English` 章节，避免逐行混排，确保两部分都能独立用于跟踪。
+
 - [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
 - [#8 Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：当前实现批次；以 Todo editor 的定义成本与恢复体验作为是否推广的标准；
 - [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；

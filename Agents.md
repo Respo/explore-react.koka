@@ -126,6 +126,14 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 5. 在 `demo/layout.kk` 里把新 route 接进页面分发。
 6. 如果 demo 有纯逻辑，就把测试加到 `demo/tests.kk` 或独立测试模块。
 
+## GitHub issue 与 PR 约定
+
+- issue 和 PR 的标题、正文都使用中英双语；标题统一写成 `中文 / English`，方便两种语言的读者搜索和识别。
+- 正文固定分成两个完整章节：先写 `# 中文`，再写 `# English`。不要逐行穿插翻译，也不要只在一个章节里补充另一种语言没有的信息。
+- issue 的两个章节都应独立包含用户问题、目标、范围、验收标准和非目标；PR 的两个章节都应独立包含用户可见结果、安全/生命周期、文档、验证和关联 issue。
+- 会影响跟踪结论的进度评论、review 回复和方案变更，也使用相同的 `# 中文` / `# English` 分段；简短机械通知可以不重复。
+- 代码标识符、命令、issue/PR 编号和链接保留原始写法，避免翻译后难以搜索。
+
 ## 代码风格约定
 
 - **不要写单行 accessor 包装函数**，例如：
