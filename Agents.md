@@ -148,6 +148,8 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - `Store_spec(...)`、`State_codec(...)`、`Action_codec(...)` 的定义统一使用 labelled fields，显式写出 `name/schema/version/decode/encode/reduce`，不要依赖难以辨认的位置参数顺序。
 - scope/path/slot/tree 属于 framework/runtime 细节；业务 view 只声明 keyed boundary，不手工拼 path。
 - 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
+- `component(...)` / `components(...)` 表示 ordinary child：当前 feature 仍 render、但 child 不再出现时，其 local store 与 effect metadata 会自动清理。filter/条件分支隐藏 child 等同 unmount。
+- `feature_root(...)` 表示 persistent boundary：整个 feature 未 render 时保留 snapshot，供 route 返回、HMR 和 reload 恢复。不要只为保留一个 input draft 就滥用 feature root。
 - feature component 自己持有稳定的 `feature_root(...)`，签名返回 `app_view vnode`，并用 labelled `key` 隔离 local store、effect、listener 与 DOM marker；domain props 是否共享由调用方决定。不要暴露 runtime 四元组或新增 `run_*_panel` adapter。
 - 只有真正支持多实例隔离的 feature 才公开 `key`；app-owned singleton（例如全局 Dialog overlay）使用固定 identity，不提供只隔离一部分 runtime surface 的伪多实例参数。
 - `feature_root(...)` 会安装 opaque feature identity；内部 helper 使用 `feature_key()` / `feature_marker(name)` 派生 VDOM sibling key 与 DOM effect marker，不层层转发 `panel_key`，也不读取 raw group/key。
@@ -216,8 +218,10 @@ div([
 - 每次 app render 只安装一个 stateful component runtime；feature 通过 scoped vnode component 在同一 handler 内组合。
 - scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
+- `respo/component-scope` 是 runtime-owned lifecycle marker，会进入 snapshot；业务模块不得读取、构造或修改。ordinary child sweep 由 framework visitation 驱动，不在 reducer 中重建 path。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
 - snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。
+- lifecycle 规则和旧 snapshot 兼容限制见 `docs/component-lifecycle.md`。
 
 ## Koka 常见易错点
 

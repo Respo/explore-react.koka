@@ -70,6 +70,64 @@ pub fun ambient_feature_identity_test() : <div> test_result
     "resolved=" ++ resolved.show,
     passed)
 
+fun lifecycle_seed_tree() : <div> list<state_entry>
+  val (_unit, tree, _effects) = run_local_state(Nil, fn() {
+    feature_root("lifecycle", "panel") {
+      component("rows", "left") {
+        val (_draft, set_draft) = state_pair(name = "draft", initial = "")
+        set_draft("left draft")
+      }
+      component("rows", "right") {
+        val (_draft, set_draft) = state_pair(name = "draft", initial = "")
+        set_draft("right draft")
+      }
+    }
+  })
+  tree
+
+pub fun ordinary_component_lifecycle_test() : <div> test_result
+  val root_scope = component_local_path("lifecycle", "panel")
+  val left_scope = component_child_path(root_scope, "rows", "left")
+  val right_scope = component_child_path(root_scope, "rows", "right")
+  val restored_tree = decode_state_snapshot(encode_state_snapshot(lifecycle_seed_tree()))
+  val (_unit, next_tree, _effects) = run_local_state(restored_tree, fn() {
+    feature_root("lifecycle", "panel") {
+      component("rows", "right") {
+        state(name = "draft", initial = "")
+        ()
+      }
+    }
+  })
+  val left_draft = read_named_local_state(next_tree, left_scope, "draft", "<removed>")
+  val right_draft = read_named_local_state(next_tree, right_scope, "draft", "<missing>")
+  val left_marker_removed = not(any(next_tree, fn(entry) entry.schema == "respo/component-scope" && entry.payload == left_scope))
+  val right_marker_kept = any(next_tree, fn(entry) entry.schema == "respo/component-scope" && entry.payload == right_scope)
+  Test_result(
+    "Ordinary child state is swept after unmount",
+    "left=" ++ left_draft ++ ", right=" ++ right_draft ++ ", markers=" ++ left_marker_removed.show ++ "/" ++ right_marker_kept.show,
+    left_draft == "<removed>" && right_draft == "right draft" && left_marker_removed && right_marker_kept)
+
+pub fun persistent_feature_lifecycle_test() : <div> test_result
+  val root_scope = component_local_path("lifecycle", "panel")
+  val left_scope = component_child_path(root_scope, "rows", "left")
+  val (_hidden, hidden_tree, _hidden_effects) = run_local_state(lifecycle_seed_tree(), fn() {
+    feature_root("other", "panel") { () }
+  })
+  val restored_tree = decode_state_snapshot(encode_state_snapshot(hidden_tree))
+  val (_returned, return_tree, _return_effects) = run_local_state(restored_tree, fn() {
+    feature_root("lifecycle", "panel") {
+      component("rows", "left") {
+        state(name = "draft", initial = "")
+        ()
+      }
+    }
+  })
+  val restored_draft = read_named_local_state(return_tree, left_scope, "draft", "<missing>")
+  Test_result(
+    "Unmounted feature root preserves child snapshot",
+    "draft=" ++ restored_draft ++ ", hidden-entries=" ++ hidden_tree.length.show,
+    restored_draft == "left draft")
+
 pub fun generic_state_codec_test() : <div> test_result
   val scope_name = component_local_path("tests", "implicit-codec")
   val ((draft, open_before), next_tree, _pending_effects) = run_local_state(Nil, fn() {

@@ -152,6 +152,31 @@ older ambiguous encoding for empty, underscore-leading, or reserved-character
 keys fall back to the component's initial value once; current application keys
 are unaffected.
 
+## Component lifecycle
+
+Persistent features and ordinary keyed children deliberately have different
+unmount behavior:
+
+| Boundary | When it is not rendered | State policy |
+| --- | --- | --- |
+| `component(...)` / `components(...)` | its current feature still renders | release the child state branch |
+| `feature_root(...)` | the whole feature is absent | retain the feature snapshot |
+| `reset_feature(...)` | integration explicitly resets a feature | release the complete feature branch |
+
+Each rendered feature records which ordinary child scopes it visited. At the
+end of that feature render, old child markers that were not visited are swept
+together with their state and effect metadata. If the feature itself is not
+rendered—for example after changing routes—no sweep runs for it, so its state
+can still return after route navigation, HMR, or a reload.
+
+This means filtering an item out of a still-mounted feature has normal unmount
+semantics and clears that item's local state. Domain reducers only remove
+domain entities; they do not reconstruct component paths for cleanup.
+
+The complete lifecycle contract, marker format, migration behavior, and usage
+guidance are documented in
+[`docs/component-lifecycle.md`](docs/component-lifecycle.md).
+
 Only the app integration boundary installs the runtime:
 
 ```koka
@@ -356,7 +381,9 @@ defensive:
   value;
 - malformed snapshot data is ignored instead of reaching a component decoder;
 - component state is restored only when its keyed scope and store schema still
-  match.
+  match;
+- `respo/component-scope` metadata preserves ordinary-child ownership across
+  HMR/reload so stale child branches can be swept on the next feature render.
 
 `src/main.js` persists the snapshot under
 `koka-respo:component-state:v1`. Writes are coalesced with

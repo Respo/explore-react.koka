@@ -18,6 +18,8 @@ pub effect hook_effects
 pub effect hook_scope
   fun push_hook_scope(scope_name : string) : ()
   fun push_feature_scope(group_name : string, key_name : string) : ()
+  fun visit_component_scope(scope_name : string) : ()
+  fun finish_feature_scope() : ()
   fun pop_hook_scope() : ()
   fun current_hook_scope_name() : string
   fun resolve_feature_key(default_key : string) : string
@@ -76,6 +78,7 @@ struct hook_frame(
   next_effect_index : int,
   feature_group_name : string,
   feature_key_name : string)
+struct feature_visit_frame(root_scope : string, visited_scopes : list<string>)
 
 fun state_codec_read(item : state_codec<a>, entry : state_entry) : maybe<a>
   item.decode.(entry.version, entry.payload)
@@ -107,8 +110,9 @@ fun hook_effect_slot(scope_base : string, index : int) : state_slot
 fun child_scope(scope_base : string, group_name : string, key_name : string) : string
   join_slot_path(join_slot_path(scope_base, normalize_slot_name(group_name)), normalize_slot_name(key_name))
 
-// Stable, inspectable component path for business code that coordinates a child
-// component outside its render body. Slot and hook ordering remain internal.
+// Stable component paths are exposed for runtime inspection and tests. Business
+// code declares boundaries through `component(...)` instead of coordinating a
+// child store by path. Slot and hook ordering remain internal.
 pub fun component_child_path(scope_base : string, group_name : string, key_name : string) : string
   child_scope(scope_base, group_name, key_name)
 
@@ -280,6 +284,7 @@ fun component_at(scope_name : string, render : () -> <hook_scope|e> a) : <hook_s
 fun with_feature_scope(group : string, key : string, action : () -> <hook_scope|e> a) : <hook_scope|e> a
   push_feature_scope(group, key)
   val result = action()
+  finish_feature_scope()
   pop_hook_scope()
   result
 
@@ -314,7 +319,9 @@ pub fun feature_marker(name : string, default_key : string = "panel") : <hook_sc
 
 // A normal keyed child component is relative to its current parent scope.
 pub fun component(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component_at(child_scope(current_hook_scope_name(), group, key), render)
+  val scope_name = child_scope(current_hook_scope_name(), group, key)
+  visit_component_scope(scope_name)
+  component_at(scope_name, render)
 
 // Render a keyed collection of child components without exposing scope-path
 // construction or repeating a one-line `map(... component(...))` helper.
@@ -589,6 +596,57 @@ fun clear_state_branch(tree : list<state_entry>, branch_path : string) : <div> l
       else
         Cons(item, clear_state_branch(rest, branch_path))
 
+// Lifecycle markers are persisted alongside component state so a restored
+// feature can distinguish ordinary children that disappeared while it was
+// unmounted. The registry path is framework-reserved and collision-free with
+// normalized business component groups.
+val component_scope_schema = "respo/component-scope"
+
+fun component_scope_registry(root_scope : string) : string
+  join_slot_path(root_scope, "$children")
+
+fun component_scope_marker_path(root_scope : string, scope_name : string) : string
+  join_slot_path(component_scope_registry(root_scope), snapshot_escape(scope_name))
+
+fun component_scope_entry(root_scope : string, scope_name : string) : state_entry
+  State_entry(
+    component_scope_marker_path(root_scope, scope_name),
+    component_scope_schema,
+    1,
+    scope_name)
+
+fun scope_was_visited(scopes : list<string>, scope_name : string) : <div> bool
+  any(scopes, fn(found) found == scope_name)
+
+fun valid_component_scope_entry(entry : state_entry, root_scope : string) : bool
+  entry.schema == component_scope_schema &&
+  entry.version == 1 &&
+  entry.payload != root_scope &&
+  path_in_branch(entry.payload, root_scope) &&
+  entry.path == component_scope_marker_path(root_scope, entry.payload)
+
+fun stale_component_scopes(tree : list<state_entry>, root_scope : string, visited_scopes : list<string>) : <div> list<string>
+  match tree
+    Nil -> Nil
+    Cons(entry, rest) -> {
+      val stale_rest = stale_component_scopes(rest, root_scope, visited_scopes)
+      if valid_component_scope_entry(entry, root_scope) && not(scope_was_visited(visited_scopes, entry.payload)) then
+        Cons(entry.payload, stale_rest)
+      else stale_rest
+    }
+
+fun clear_component_scopes(tree : list<state_entry>, root_scope : string, scopes : list<string>) : <div> list<state_entry>
+  match scopes
+    Nil -> tree
+    Cons(scope_name, rest) ->
+      clear_component_scopes(
+        clear_state(clear_state_branch(tree, scope_name), component_scope_marker_path(root_scope, scope_name)),
+        root_scope,
+        rest)
+
+fun sweep_feature_components(tree : list<state_entry>, root_scope : string, visited_scopes : list<string>) : <div> list<state_entry>
+  clear_component_scopes(tree, root_scope, stale_component_scopes(tree, root_scope, visited_scopes))
+
 // Reset a persistent feature instance without exposing runtime tree paths to
 // business lifecycle code.
 pub fun reset_feature(group : string, key : string) : <component_runtime,div> ()
@@ -679,9 +737,12 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
   var next_tree := tree
   var pending_effects := Nil
   var hook_stack : list<hook_frame> := Nil
+  var feature_visit_stack : list<feature_visit_frame> := Nil
   var current_hook_scope := ""
   var current_feature_group := ""
   var current_feature_key := ""
+  var current_feature_scope := ""
+  var visited_component_scopes : list<string> := Nil
   var next_state_hook_index := 0
   var next_effect_hook_index := 0
   with return(result) (result, next_tree, pending_effects)
@@ -735,11 +796,39 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
         next_effect_hook_index,
         current_feature_group,
         current_feature_key), hook_stack)
+      feature_visit_stack := Cons(Feature_visit_frame(current_feature_scope, visited_component_scopes), feature_visit_stack)
       current_hook_scope := component_local_path(group_name, key_name)
       current_feature_group := group_name
       current_feature_key := key_name
+      current_feature_scope := current_hook_scope
+      visited_component_scopes := Nil
       next_state_hook_index := 0
       next_effect_hook_index := 0
+    }
+    fun visit_component_scope(scope_name) {
+      if current_feature_scope == "" then ()
+      else {
+        if scope_was_visited(visited_component_scopes, scope_name) then ()
+        else visited_component_scopes := Cons(scope_name, visited_component_scopes)
+        next_tree := assoc_entry(next_tree, component_scope_entry(current_feature_scope, scope_name))
+      }
+    }
+    fun finish_feature_scope() {
+      if current_feature_scope == "" then ()
+      else next_tree := sweep_feature_components(next_tree, current_feature_scope, visited_component_scopes)
+      match feature_visit_stack
+        Nil -> {
+          current_feature_scope := ""
+          visited_component_scopes := Nil
+        }
+        Cons(frame, rest) -> {
+          feature_visit_stack := rest
+          match frame
+            Feature_visit_frame(root_scope, visited_scopes) -> {
+              current_feature_scope := root_scope
+              visited_component_scopes := visited_scopes
+            }
+        }
     }
     fun pop_hook_scope() {
       match hook_stack

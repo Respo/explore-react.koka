@@ -35,6 +35,16 @@
 - 业务组件不再手工拼装 listener/effect/store path；
 - state、effect 和 named listener 共享稳定的 keyed component scope。
 
+### Component lifecycle
+
+- `feature_root(...)` 是 persistent boundary：整个 feature 未 render 时保留 snapshot，支持 route 返回、HMR 和 reload；
+- `component(...)` / `components(...)` 是 ordinary child boundary：当前 feature 仍 render、但 child 不再访问时执行 unmount sweep；
+- runtime 使用可持久化的 `respo/component-scope` marker 记录 child 归属，不根据 path 形状猜测业务结构；
+- sweep 删除普通 child 的 store、effect metadata 与 lifecycle marker；listener registry 每轮重建，不需要持久化清理；
+- Todo 删除单项与 Clear done 都由 render lifecycle 自动释放 editor state，不再由 domain reducer 清理 path；
+- app-owned persistent singleton 仍可在 integration boundary 使用 `reset_feature(...)` 显式重置；
+- 完整契约见 [`docs/component-lifecycle.md`](docs/component-lifecycle.md)。
+
 ### Typed component store
 
 - `store_spec<s,a>` 将 state codec、action codec 和纯 reducer 组合在一起；
@@ -68,6 +78,7 @@
 - 父组件不再读取子组件 local store 做汇总；跨组件真正需要的数据应提升为 domain state；
 - 旧的 `demo/runtimebridge.kk` / `demo/runtimeowner.kk` 过渡层已经删除；
 - snapshot 使用 path + schema + version + payload；
+- ordinary child ownership marker 会进入 snapshot；feature 恢复后可继续判断 stale child，旧版无 marker 的孤立 entry 不做不安全的 path 推断；
 - malformed snapshot、unknown schema 和 version mismatch 会安全回退；
 - key segment 使用无碰撞 canonical encoding；现有 slug/数字路径保持不变，旧版空串、下划线开头或保留字符 key 的 snapshot 允许一次性回退 initial state；
 - `src/main.js` 在事件后合并保存，并在 HMR replacement、dispose、`pagehide` 前 flush；
@@ -160,7 +171,7 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 ### 4. 完善 effect 生命周期
 
 - 重新评估 `state_effect(...)` cleanup 契约；
-- 让 effect 的 component identity 与 snapshot state identity 保持一致；
+- effect metadata 已跟随 ordinary component identity 执行 unmount sweep；下一步定义真正的 cleanup callback 契约；
 - HMR 前确认旧 runtime 的 cleanup、snapshot flush 和新 runtime boot 顺序；
 - 继续保持 browser host 只负责能力实现，不接管 feature workflow。
 
@@ -174,9 +185,9 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ## GitHub 跟踪
 
-- [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：当前实现批次；
+- [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
 - [#8 Prototype action-replay component stores for HMR recovery](https://github.com/Respo/explore-react.koka/issues/8)：后续独立实验，不把外部 effect replay 混入本轮重构。
-- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：由 framework lifecycle 处理永久移除的 keyed child，避免业务 reducer 重建 path 清理。
+- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：当前实现批次；由 framework visitation 处理永久移除的 keyed child。
 
 ## 验证标准
 
@@ -189,7 +200,8 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 5. 快速 input 后立即触发 click/Enter 不丢最后一次值；
 6. HMR replacement 后 component store 能从最新 snapshot 恢复；
 7. malformed/旧版本 snapshot 不导致 boot 失败；
-8. listener registry 没有 duplicate id 或 semantic drift warning。
+8. listener registry 没有 duplicate id 或 semantic drift warning；
+9. ordinary child unmount 会清理 store/effect/marker，整个 feature unmount 仍保留 snapshot。
 
 ## 非目标
 
