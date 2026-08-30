@@ -126,6 +126,14 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 5. 在 `demo/layout.kk` 里把新 route 接进页面分发。
 6. 如果 demo 有纯逻辑，就把测试加到 `demo/tests.kk` 或独立测试模块。
 
+## GitHub issue 与 PR 约定
+
+- issue 和 PR 的标题、正文都使用中英双语；标题统一写成 `中文 / English`，方便两种语言的读者搜索和识别。
+- 正文固定分成两个完整章节：先写 `# 中文`，再写 `# English`。不要逐行穿插翻译，也不要只在一个章节里补充另一种语言没有的信息。
+- issue 的两个章节都应独立包含用户问题、目标、范围、验收标准和非目标；PR 的两个章节都应独立包含用户可见结果、安全/生命周期、文档、验证和关联 issue。
+- 会影响跟踪结论的进度评论、review 回复和方案变更，也使用相同的 `# 中文` / `# English` 分段；简短机械通知可以不重复。
+- 代码标识符、命令、issue/PR 编号和链接保留原始写法，避免翻译后难以搜索。
+
 ## 代码风格约定
 
 - **不要写单行 accessor 包装函数**，例如：
@@ -144,8 +152,10 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
 - domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
 - 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
-- 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
-- `Store_spec(...)`、`State_codec(...)`、`Action_codec(...)` 的定义统一使用 labelled fields，显式写出 `name/schema/version/decode/encode/reduce`，不要依赖难以辨认的位置参数顺序。
+- 一个 store 把 state 类型、action 类型、纯 reducer、action codec 和显式 recovery policy 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
+- store 统一通过 labelled `snapshot_store(...)` / `replay_store(...)` 构造，不让业务模块直接依赖 `Store_spec(...)` 的内部字段顺序。`State_codec(...)`、`Action_codec(...)` 仍显式写出 `schema/version/decode/encode`。
+- `snapshot_store(...)` 适合累积、toggle 或无法安全压缩的状态；`replay_store(...)` 只适合有明确 session 边界的纯 component actions，并使用 `Replay_start` / `Replay_replace(slot)` / `Replay_reset` 声明恢复语义。
+- replay slot 必须是有限、稳定的语义名称；不要用动态业务 id/用户输入制造 slot，也不要通过丢弃最早 action 强行限制日志。无法安全压缩时回到 snapshot store。
 - scope/path/slot/tree 属于 framework/runtime 细节；业务 view 只声明 keyed boundary，不手工拼 path。
 - 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
 - `component(...)` / `components(...)` 表示 ordinary child：当前 feature 仍 render、但 child 不再出现时，其 local store 与 effect metadata 会自动清理。filter/条件分支隐藏 child 等同 unmount。
@@ -193,7 +203,7 @@ button(
 - component store 由 `use_store(...)` 返回的 dispatch 自动发 observation，业务 view 不重复埋点。
 - app/runtime 边界通过 `run_runtime_action_observed(...)` 获取有序 action 列表；不需要观察的测试或内部调用使用 `run_runtime_action(...)`。
 - observation 表示“已发送 intent”，不表示 reducer 成功或外部 effect 已提交。confirm 拒绝的 action 仍可被观察。
-- 未建立权限、effect response 和幂等策略前，不自动 replay，也不把 action log 混入 component-state snapshot。
+- `replay_store(...)` 的 scoped pure component-action log 可以进入 component snapshot，但与统一 observation stream 分开；未建立权限、effect response 和幂等策略前，不自动 replay domain/external-effect actions。
 - 新增 domain action 时，codec 与 action/reducer 放在同一 feature 模块，并覆盖 schema/version/payload 的 round-trip 测试。
 
 ## Element 调用约定
@@ -219,6 +229,7 @@ div([
 - scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
 - `respo/component-scope` 是 runtime-owned lifecycle marker，会进入 snapshot；业务模块不得读取、构造或修改。ordinary child sweep 由 framework visitation 驱动，不在 reducer 中重建 path。
+- replay entry 使用 `respo/replay:<action-schema>`，只由 `replay_store(...)` 读写；业务 view 仍只使用 `(state, dispatch) = use_store(...)`。恢复策略与选择标准见 `docs/store-recovery.md`。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
 - snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。
 - lifecycle 规则和旧 snapshot 兼容限制见 `docs/component-lifecycle.md`。

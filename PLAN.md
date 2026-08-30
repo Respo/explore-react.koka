@@ -47,8 +47,12 @@
 
 ### Typed component store
 
-- `store_spec<s,a>` 将 state codec、action codec 和纯 reducer 组合在一起；
-- store 与 codec 定义使用完整 labelled fields，使 runtime identity、snapshot schema、action schema 与 reducer 职责在声明处清晰分组；
+- `store_spec<s,a>` 将 action codec、纯 reducer 和显式 recovery policy 组合在一起；
+- `snapshot_store(...)` 保存完整 typed state，适合累积、toggle 或不能安全压缩的 reducer；
+- `replay_store(...)` 保存当前 session 内压缩后的 typed component actions，不要求 state codec；
+- replay policy 只提供 `Replay_start` / `Replay_replace(slot)` / `Replay_reset`，框架不通过截断任意 action 历史换取有界日志；
+- Todo editor 使用 replay recovery，Lab incident 继续使用 snapshot recovery，组件调用保持同一个 `use_store(...)` reducer pair；
+- store 与 codec 定义使用完整 labelled fields，使 runtime identity、recovery、action schema 与 reducer 职责在声明处清晰分组；
 - 组件调用收敛为 `(state, dispatch) = use_store(spec, initial = ...)`，对齐 React `useReducer`；
 - `on_store_click(...)` / `on_store_input(...)` 使用 labelled `action + dispatch` 直接发 typed action；
 - binding record 与 `.current` / `.send` 不再暴露给业务 view；
@@ -80,6 +84,7 @@
 - snapshot 使用 path + schema + version + payload；
 - ordinary child ownership marker 会进入 snapshot；feature 恢复后可继续判断 stale child，旧版无 marker 的孤立 entry 不做不安全的 path 推断；
 - malformed snapshot、unknown schema 和 version mismatch 会安全回退；
+- replay store 使用 `respo/replay:<action-schema>` entry，从当前 `initial` 和 decoded component actions 恢复；
 - key segment 使用无碰撞 canonical encoding；现有 slug/数字路径保持不变，旧版空串、下划线开头或保留字符 key 的 snapshot 允许一次性回退 initial state；
 - `src/main.js` 在事件后合并保存，并在 HMR replacement、dispose、`pagehide` 前 flush；
 - 同一 snapshot 同时支持开发时 JS 替换和普通页面的 localStorage 恢复。
@@ -108,6 +113,8 @@ feature_marker(name)
 component(group, key) { ... }
 components(items, group = ..., key = ..., render = ...)
 
+snapshot_store(name = ..., state_codec = ..., action_codec = ..., reduce = ...)
+replay_store(name = ..., action_codec = ..., replay = ..., reduce = ...)
 use_store(spec, initial = ...)
 state_effect(name = ..., deps = ..., action = ...)
 on_store_click(name, action = ..., dispatch = ...)
@@ -150,12 +157,13 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 - 评估是否提供框架级 codec combinators，减少 feature 手写 encode/decode；
 - 保持 decoder 失败时回退 initial state，不让单个坏 entry 阻断 boot。
 
-### 2. 定义 replay 与权限策略
+### 2. 评估 replay authoring 与权限策略
 
-- 为可安全 replay 的纯 action 增加显式 metadata，不从 codec 存在性推断；
+- Todo editor 已用显式 start/replace/reset policy 验证 session 型 replay；下一步先按 #8 的使用者标准评估定义规模与 HMR 行为，再决定是否推广；
+- 只有天然有界 session 使用 component replay，不能安全压缩的 store 保持 snapshot；
 - 外部 effect action 默认只允许 inspect，replay 需要 capability/permission；
 - 定义 confirmation、request、timer 等 effect 的 recorded response 与去重策略；
-- action log persistence 与 component-state snapshot 分开版本和保留周期；
+- agent/domain action log persistence 与 scoped component replay entry 分开版本、权限和保留周期；
 - devtools/agents 只能通过已注册 codec 解码和投递，不能写 raw state tree。
 
 ### 3. 拆分 component facade 与 runtime/testing API
@@ -185,9 +193,13 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ## GitHub 跟踪
 
+issue、PR 及影响结论的进度更新统一使用中英双语：标题采用 `中文 / English`，正文分别写成完整的 `# 中文` 与 `# English` 章节，避免逐行混排，确保两部分都能独立用于跟踪。
+
 - [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
-- [#8 Prototype action-replay component stores for HMR recovery](https://github.com/Respo/explore-react.koka/issues/8)：后续独立实验，不把外部 effect replay 混入本轮重构。
-- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：当前实现批次；由 framework visitation 处理永久移除的 keyed child。
+- [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：当前实现批次；以 Todo editor 的定义成本与恢复体验作为是否推广的标准；
+- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
+- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：等待 #8 明确 session 完成语义后再评估公共 abstraction；
+- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：在 recovery API 稳定后整理 quick start、authoring API 与 module 边界。
 
 ## 验证标准
 
@@ -201,7 +213,8 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 6. HMR replacement 后 component store 能从最新 snapshot 恢复；
 7. malformed/旧版本 snapshot 不导致 boot 失败；
 8. listener registry 没有 duplicate id 或 semantic drift warning；
-9. ordinary child unmount 会清理 store/effect/marker，整个 feature unmount 仍保留 snapshot。
+9. ordinary child unmount 会清理 store/effect/marker，整个 feature unmount 仍保留 snapshot；
+10. replay editor 的重复 input 只保留最新 draft，finish/cancel 回到最新 `initial`，malformed/version mismatch 安全回退。
 
 ## 非目标
 

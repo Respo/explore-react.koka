@@ -54,10 +54,48 @@ pub struct state_codec<a>(schema : string, version : int, decode : (int, string)
 
 pub struct state_entry(path : string, schema : string, version : int, payload : string)
 
-// A component store keeps state and actions typed inside business code. Only
-// state entries and action messages cross the type-erased runtime boundary.
-pub struct store_spec<s,a>(name : string, state_codec : state_codec<s>, action_codec : action_codec<a>, reduce : (s, a) -> s)
+// Recovery stays explicit at the store definition while the component always
+// sees the same `(state, dispatch)` pair. Snapshot stores persist encoded state;
+// replay stores persist a session-compacted list of pure component actions.
+pub type replay_action_mode
+  Replay_start
+  Replay_replace(slot : string)
+  Replay_reset
+
+pub type store_recovery<s,a>
+  Snapshot_recovery(codec : state_codec<s>)
+  Replay_recovery(replay : (a) -> replay_action_mode)
+
+pub struct store_spec<s,a>(
+  name : string,
+  action_codec : action_codec<a>,
+  reduce : (s, a) -> s,
+  recovery : store_recovery<s,a>)
 pub alias store_dispatch<a> = (a) -> <action_observation,local_state_write,div> ()
+
+pub fun snapshot_store<s,a>(
+  name : string,
+  state_codec : state_codec<s>,
+  action_codec : action_codec<a>,
+  reduce : (s, a) -> s
+) : store_spec<s,a>
+  Store_spec(
+    name = name,
+    action_codec = action_codec,
+    reduce = reduce,
+    recovery = Snapshot_recovery(state_codec))
+
+pub fun replay_store<s,a>(
+  name : string,
+  action_codec : action_codec<a>,
+  replay : (a) -> replay_action_mode,
+  reduce : (s, a) -> s
+) : store_spec<s,a>
+  Store_spec(
+    name = name,
+    action_codec = action_codec,
+    reduce = reduce,
+    recovery = Replay_recovery(replay))
 
 inline extern snapshot_escape(text : string) : string
   js inline "encodeURIComponent(#1)"
@@ -351,18 +389,97 @@ pub fun state<a>(name : string, initial : a, ?state_codec : state_codec<a>) : <h
 pub fun state_pair<a>(name : string, initial : a, ?state_codec : state_codec<a>) : <hook_scope,local_state_read,div> (a, (a) -> <local_state_write,div> ())
   use_named_state_pair(local_named_state_slot(name), initial)
 
+fun encode_replay_actions<a>(items : list<a>, codec : action_codec<a>) : string
+  match items
+    Nil -> ""
+    Cons(item, rest) -> {
+      // Prefix every action so an action whose codec payload is empty remains
+      // distinct from an empty replay session.
+      val encoded = "a" ++ snapshot_escape(codec.encode.(item))
+      match rest
+        Nil -> encoded
+        Cons(_, _) -> encoded ++ "\n" ++ encode_replay_actions(rest, codec)
+    }
+
+fun decode_replay_actions<a>(lines : list<string>, version : int, codec : action_codec<a>) : maybe<list<a>>
+  match lines
+    Nil -> Just(Nil)
+    Cons(line, rest) -> {
+      match list(line)
+        Nil -> Nothing
+        Cons(tag, _payload_chars) -> {
+          val encoded_payload = line.tail
+          if tag != 'a' || not(snapshot_unescape_valid(encoded_payload)) then Nothing
+          else match codec.decode.(version, snapshot_unescape(encoded_payload))
+            Nothing -> Nothing
+            Just(action) ->
+              match decode_replay_actions(rest, version, codec)
+                Nothing -> Nothing
+                Just(actions) -> Just(Cons(action, actions))
+        }
+    }
+
+fun replay_action_state_codec<a>(codec : action_codec<a>) : state_codec<list<a>>
+  val codec_schema = codec.schema
+  val codec_version = codec.version
+  State_codec(
+    schema = "respo/replay:" ++ codec_schema,
+    version = codec_version,
+    decode = fn(version, payload) {
+      if version != codec_version then Nothing
+      else if payload == "" then Just(Nil)
+      else decode_replay_actions(split(payload, "\n"), version, codec)
+    },
+    encode = fn(actions) encode_replay_actions(actions, codec))
+
+fun reduce_replay_actions<s,a>(initial : s, actions : list<a>, reduce : (s, a) -> s) : s
+  match actions
+    Nil -> initial
+    Cons(action, rest) -> reduce_replay_actions(reduce(initial, action), rest, reduce)
+
+fun remove_replay_slot<a>(items : list<a>, slot : string, replay : (a) -> replay_action_mode) : list<a>
+  match items
+    Nil -> Nil
+    Cons(item, rest) ->
+      match replay(item)
+        Replay_replace(found) ->
+          if found == slot then remove_replay_slot(rest, slot, replay)
+          else Cons(item, remove_replay_slot(rest, slot, replay))
+        _ -> Cons(item, remove_replay_slot(rest, slot, replay))
+
+fun compact_replay_actions<a>(items : list<a>, action : a, replay : (a) -> replay_action_mode) : list<a>
+  match replay(action)
+    Replay_start -> [action]
+    Replay_replace(slot) -> remove_replay_slot(items, slot, replay) ++ [action]
+    Replay_reset -> Nil
+
 // Reducer-backed local state follows the familiar `(state, dispatch)` shape.
 // Action observation stays inside dispatch, so component definitions keep the
 // familiar reducer pair without exposing a framework-specific binding record.
 pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_state_read,div> (s, store_dispatch<a>)
   val scope = current_hook_scope_name()
   val entry_slot = local_named_state_slot(spec.name)
-  val codec = spec.state_codec
-  val current = use_named_state(entry_slot, codec, initial)
-  (current, fn(action) {
-    emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
-    update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action))
-  })
+  match spec.recovery
+    Snapshot_recovery(codec) -> {
+      val current = use_named_state(entry_slot, codec, initial)
+      (current, fn(action) {
+        emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
+        update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action))
+      })
+    }
+    Replay_recovery(replay) -> {
+      val codec = replay_action_state_codec(spec.action_codec)
+      val actions = use_named_state(entry_slot, codec, Nil)
+      val current = reduce_replay_actions(initial, actions, spec.reduce)
+      (current, fn(action) {
+        emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
+        update_named_state(
+          entry_slot,
+          codec,
+          Nil,
+          fn(latest) compact_replay_actions(latest, action, replay))
+      })
+    }
 
 pub fun encode_store_action<s,a>(target : string, spec : store_spec<s,a>, action : a) : action_envelope
   encode_action(source = "component", target = target, codec = spec.action_codec, action = action)
@@ -372,7 +489,18 @@ pub fun decode_store_action<s,a>(spec : store_spec<s,a>, message : action_envelo
   else decode_action(spec.action_codec, message)
 
 pub fun read_store_state<s,a>(tree : list<state_entry>, scope_name : string, spec : store_spec<s,a>, initial : s) : <div> s
-  read_named_local_state(tree, scope_name, spec.name, initial, spec.state_codec)
+  match spec.recovery
+    Snapshot_recovery(codec) ->
+      read_named_local_state(tree, scope_name, spec.name, initial, codec)
+    Replay_recovery(_replay) -> {
+      val actions = read_named_local_state(
+        tree,
+        scope_name,
+        spec.name,
+        Nil,
+        replay_action_state_codec(spec.action_codec))
+      reduce_replay_actions(initial, actions, spec.reduce)
+    }
 
 pub fun state_effect(name : string, deps : list<string>, action : () -> io ()) : <hook_scope,hook_effects,div> ()
   use_named_effect(local_named_effect_slot(name), deps, action)

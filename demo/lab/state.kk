@@ -39,7 +39,7 @@ fun decode_incident_local_action(version : int, payload : string) : maybe<incide
   else if payload.head == "d" then Just(Change_incident_draft(payload.tail))
   else Nothing
 
-pub val incident_local_store : store_spec<incident_local_state,incident_local_action> = Store_spec(
+pub val incident_local_store : store_spec<incident_local_state,incident_local_action> = snapshot_store(
   name = "incident",
   state_codec = State_codec(
     schema = "lab/incident-local",

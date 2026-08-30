@@ -205,7 +205,7 @@ setters. A store combines:
 - a state type;
 - a serializable action type;
 - one pure update function;
-- versioned codecs used by the runtime and snapshot boundary.
+- one explicit recovery choice at the store definition.
 
 ```koka
 pub struct task_editor_state(editing : bool, draft : string)
@@ -223,26 +223,34 @@ fun reduce_task_editor(current : task_editor_state, action : task_editor_action)
     Finish_edit -> current(editing = False)
     Cancel_edit(title) -> Task_editor_state(False, title)
 
-pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = Store_spec(
+pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = replay_store(
   name = "editor",
-  state_codec = State_codec(
-    schema = "todo/task-editor",
-    version = 1,
-    decode = decode_task_editor,
-    encode = encode_task_editor),
   action_codec = Action_codec(
     schema = "todo/task-editor-action",
     version = 1,
     decode = decode_task_editor_action,
     encode = encode_task_editor_action),
+  replay = fn(action) {
+    match action
+      Begin_edit(_) -> Replay_start
+      Change_draft(_) -> Replay_replace("draft")
+      Finish_edit -> Replay_reset
+      Cancel_edit(_) -> Replay_reset
+  },
   reduce = reduce_task_editor)
 ```
 
 Store definitions use labelled fields deliberately. `name` owns runtime
-identity, `state_codec` owns snapshot compatibility, `action_codec` owns the
-observable wire action, and `reduce` is the pure transition. Avoid positional
-`Store_spec(...)`, `State_codec(...)`, and `Action_codec(...)` calls: they are
-shorter but make schema/version and encode/decode order too easy to misread.
+identity, `action_codec` owns the observable wire action, and `reduce` is the
+pure transition. `replay` declares a bounded editor session: begin replaces an
+old session, repeated draft changes replace the same stable slot, and
+finish/cancel return to the call site's latest `initial` value.
+
+Use `snapshot_store(...)` when state cannot be safely represented by
+`Replay_start` / `Replay_replace(slot)` / `Replay_reset`. Counters, arbitrary
+toggle history, and accumulative collections normally keep an explicit state
+codec. The runtime never truncates arbitrary actions because doing so can
+change reducer semantics.
 
 The component-facing call mirrors React's reducer pair:
 
@@ -271,9 +279,11 @@ button(
     dispatch = dispatch))
 ```
 
-The codecs are defined once beside the store. They are not passed through every
-component call. Explicit scope/path/tree access is reserved for framework and
-testing code.
+The required codecs are defined once beside the store. They are not passed
+through every component call. Explicit scope/path/tree access is reserved for
+framework and testing code. See
+[`docs/store-recovery.md`](docs/store-recovery.md) for the recovery decision,
+replay modes, migration behavior, and complete examples.
 
 Feature render and panel APIs return only `vnode`. The app boundary owns the
 runtime tree through `runtime_frame`, and one `run_component(...)` pass collects
@@ -364,12 +374,13 @@ logger. The browser runtime uses `run_runtime_action_observed(...)` to log the
 same stream, while `run_runtime_action(...)` deliberately handles and discards
 it for callers that do not need observation.
 
-This is an intent log, not a replay engine. Dispatch is observed before the
-reducer/workflow runs, so an action remains visible even when confirmation
-rejects it. Replaying actions that invoke browser or service effects needs a
-separate policy for permissions, deduplication, and recorded responses. Until
-that policy exists, the runtime does not automatically persist or replay the
-action stream.
+This observation stream is an intent log, not a general replay engine. Dispatch
+is observed before the reducer/workflow runs, so an action remains visible even
+when confirmation rejects it. A component may explicitly choose
+`replay_store(...)`; that store persists only its own scoped pure actions and
+does not consume the observation stream. Replaying actions that invoke browser
+or service effects still needs a separate policy for permissions,
+deduplication, and recorded responses.
 
 ## State snapshots, HMR, and reloads
 
@@ -382,6 +393,8 @@ defensive:
 - malformed snapshot data is ignored instead of reaching a component decoder;
 - component state is restored only when its keyed scope and store schema still
   match;
+- replay stores use `respo/replay:<action-schema>` entries and rebuild state
+  from the current `initial` plus decoded component actions;
 - `respo/component-scope` metadata preserves ordinary-child ownership across
   HMR/reload so stale child branches can be swept on the next feature render.
 
