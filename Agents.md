@@ -151,7 +151,8 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - 业务组件用 `(state, dispatch) = use_store(spec, initial = ...)` 读取 reducer pair，不额外暴露 binding record。
 - UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
 - domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
-- 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
+- 同一事件固定按顺序发送一个完整 domain action、再按条件发送一个 component-store action 时，使用 `action_store_transition(...)` 构造 handler，并交给现有 `on_local_click(...)` / `on_local_enter(...)`；不要为每种 DOM event 增加 transition helper。
+- `action_store_transition(...)` 总是先发送 domain action；`store_when` 只控制后续 component action。包含多步更新、复杂分支或直接 model 输入时才手写 `on_local_*` handler。
 - 一个 store 把 state 类型、action 类型、纯 reducer、action codec 和显式 recovery policy 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
 - store 统一通过 labelled `snapshot_store(...)` / `replay_store(...)` 构造，不让业务模块直接依赖 `Store_spec(...)` 的内部字段顺序。`State_codec(...)`、`Action_codec(...)` 仍显式写出 `schema/version/decode/encode`。
 - `snapshot_store(...)` 适合累积、toggle 或无法安全压缩的状态；`replay_store(...)` 只适合有明确 session 边界的纯 component actions，并使用 `Replay_start` / `Replay_replace(slot)` / `Replay_reset` 声明恢复语义。
@@ -166,7 +167,7 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - `feature_node_key(...)` / `feature_dom_marker(...)` 只保留给 framework/runtime inspection 与 tests，不进入业务 view。
 - 整棵 app tree 只在集成层调用一次 `run_component(owner, group = ..., key = ..., render = fn(owner) ...)`，不要让 layout 手工合并 effects/registries。
 - 高层 view component 保持一个主要 domain value 位置参数，其余 callback/config props 使用 labelled arguments，例如 `on_input = ...`、`on_submit = ...`、`on_select = ...`。
-- domain reducer/workflow 不读取或写入 child component store；需要 draft 等当前值时，把值放进 serializable domain action，再由组件在同一个 `on_local_*` handler 内协调自身 store transition。
+- domain reducer/workflow 不读取或写入 child component store；需要 draft 等当前值时，把值放进 serializable domain action，再由组件用 `action_store_transition(...)` 协调一个简单 store transition，或在复杂情况下使用 `on_local_*`。
 - action 必须可序列化，方便事件日志、恢复、回放，以及后续 agents/actions/store 工具链。
 
 推荐形态：
@@ -183,16 +184,19 @@ input_text(
     action = Change_draft,
     dispatch = dispatch_editor))
 
-val save_edit = fn(owner : model) {
-  val next = dispatch(Save_task(draft), owner)
-  if draft == "" then () else dispatch_editor(Finish_edit)
-  next
-}
+val save_edit = action_store_transition(
+  Save_task(draft),
+  dispatch = dispatch,
+  store_action = Finish_edit,
+  store = dispatch_editor,
+  store_when = draft != "")
 
 button(
   "Save",
   click = on_local_click("save-edit", save_edit))
 ```
+
+完整选择规则和 action observation 顺序见 `docs/action-store-transitions.md`。
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
 

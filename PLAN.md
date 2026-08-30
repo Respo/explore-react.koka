@@ -63,12 +63,13 @@
 ### Typed domain-action listeners
 
 - `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` 直接连接 typed action 与 feature dispatch；
+- `action_store_transition(...)` 表达“一个 domain action，然后按条件发送一个 component-store action”，并由 click/Enter 复用同一个 handler；
 - action、dispatch 使用 labelled arguments，在 element 调用点保持可读；
 - Todo、Lab、Route 已移除仅用于 `dispatch(action, owner)` 的一次性 closure；
 - Search 的 `on_input` / `on_submit` / `on_select` 与 Bridge 的 `on_select` callback props 已进入 typed registry，不再由 view 制造 raw listener payload；
 - Search item 与 Bridge case 使用稳定业务 id，过滤或重排不会改变同一交互的 registry identity；
-- `on_local_*` 只保留给直接 model 更新、分支逻辑或尚未 action 化的组件流程；
-- 同一事件需要同时发送 domain intent 和更新自身 store 时使用 `on_local_*`；Todo `Save_task(title)` 与 Lab `Send_reply(id, message)` 已采用这种完整 action；
+- Todo 的开始/保存/取消编辑与 Lab 的发送回复已共享同一个 event-independent transition abstraction；domain action 保持完整，store action 顺序可观察；
+- `on_local_*` 只保留给直接 model 更新、多步更新、复杂分支或尚未 action 化的组件流程；
 - Todo、Lab、Route 迁移保留原 semantic name/path；Search、Bridge 则有意从 legacy raw payload 收敛到稳定 registry path。
 
 ### Runtime ownership 与恢复
@@ -122,6 +123,7 @@ on_store_input(name, action = ..., dispatch = ...)
 on_action_click(name, action = ..., dispatch = ...)
 on_action_input(name, action = ..., dispatch = ...)
 on_action_enter(name, action = ..., dispatch = ...)
+action_store_transition(action, dispatch = ..., store_action = ..., store = ..., store_when = ...)
 on_local_click(name, handler)
 on_local_input(name, handler)
 on_local_enter(name, handler)
@@ -196,10 +198,10 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 issue、PR 及影响结论的进度更新统一使用中英双语：标题采用 `中文 / English`，正文分别写成完整的 `# 中文` 与 `# English` 章节，避免逐行混排，确保两部分都能独立用于跟踪。
 
 - [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
-- [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：当前实现批次；以 Todo editor 的定义成本与恢复体验作为是否推广的标准；
+- [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：已由 PR #14 合并；snapshot/replay recovery 选择与 Todo editor session 语义已落地；
 - [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
-- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：等待 #8 明确 session 完成语义后再评估公共 abstraction；
-- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：在 recovery API 稳定后整理 quick start、authoring API 与 module 边界。
+- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：当前实现批次；以四个真实调用点、action 顺序测试和组件定义可读性作为是否保留公共 API 的标准；
+- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：等待 #12 的 transition API 完成使用者评估后，整理 quick start、authoring API 与 module 边界。
 
 ## 验证标准
 

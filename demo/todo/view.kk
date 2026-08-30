@@ -14,21 +14,9 @@ fun task_item_view(item : task) : app_view vnode
   val draft_marker = feature_marker("task-draft-" ++ tid.show)
   val (Task_editor_state(editing, draft), dispatch_editor) = use_store(task_editor_store, initial = Task_editor_state(False, item.title))
   val dispatch = fn(action, owner) dispatch_task_item_action(action, item, owner)
-  val start_edit = fn(owner : model) {
-    val next = dispatch(Edit_task, owner)
-    dispatch_editor(Begin_edit(item.title))
-    next
-  }
-  val save_edit = fn(owner : model) {
-    val next = dispatch(Save_task(draft), owner)
-    if draft == "" then () else dispatch_editor(Finish_edit)
-    next
-  }
-  val cancel_edit = fn(owner : model) {
-    val next = dispatch(Cancel_task, owner)
-    dispatch_editor(Cancel_edit(item.title))
-    next
-  }
+  val start_edit = action_store_transition(Edit_task, dispatch = dispatch, store_action = Begin_edit(item.title), store = dispatch_editor)
+  val save_edit = action_store_transition(Save_task(draft), dispatch = dispatch, store_action = Finish_edit, store = dispatch_editor, store_when = draft != "")
+  val cancel_edit = action_store_transition(Cancel_task, dispatch = dispatch, store_action = Cancel_edit(item.title), store = dispatch_editor)
   state_effect(name = "focus-editor", deps = [tid.show, if editing then "editing" else "idle"], action = fn() {
     if editing then {
       dom_focus(draft_marker)

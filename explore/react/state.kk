@@ -557,6 +557,23 @@ pub fun on_action_enter<s,a,e::E>(name : string, action : a, dispatch : (a, s) -
 pub fun on_action_input<s,a,e::E>(name : string, action : (string) -> a, dispatch : (a, s) -> <div|e> s) : <hook_scope,listener_registry<s,e>,div> listener
   on_local_input(name, fn(value, owner) dispatch(action(value), owner))
 
+// Build one local listener handler that sends a complete domain intent first,
+// then optionally advances the component store. Keeping this independent of a
+// DOM event lets click and Enter reuse the same transition without growing an
+// event-by-target helper family.
+pub fun action_store_transition<s,a,b,e::E>(
+  action : a,
+  dispatch : (a, s) -> <action_observation,local_state_write,div|e> s,
+  store_action : b,
+  store : store_dispatch<b>,
+  store_when : bool = True
+) : ((s) -> <action_observation,local_state_write,div|e> s)
+  fn(owner) {
+    val next = dispatch(action, owner)
+    if store_when then store(store_action) else ()
+    next
+  }
+
 // Common reducer-backed controls only emit a typed component action and leave
 // the owner unchanged. These helpers keep that event plumbing out of views.
 pub fun on_store_click<s,a,e::E>(name : string, action : a, dispatch : store_dispatch<a>) : <hook_scope,listener_registry<s,<action_observation,local_state_write|e>>,div> listener
