@@ -27,6 +27,9 @@ inline extern runtime_snapshot_unescape(text : string) : string
 inline extern runtime_snapshot_unescape_valid(text : string) : bool
   js inline "((s) => { try { decodeURIComponent(s); return true; } catch (_) { return false; } })(#1)"
 
+val runtime_snapshot_marker = "respo/runtime-snapshot"
+val runtime_snapshot_version = 1
+
 fun encode_snapshot_entry(entry : state_entry) : string
   runtime_snapshot_escape(entry.path) ++ "|" ++
   runtime_snapshot_escape(entry.schema) ++ "|" ++
@@ -38,13 +41,16 @@ fun append_snapshot_line(line : string, rest : string) : string
 
 // Effect dependency signatures are render metadata. They are intentionally
 // rebuilt after HMR instead of being persisted with component state.
-pub fun encode_state_snapshot(tree : list<state_entry>) : <div> string
+fun encode_snapshot_entries(tree : list<state_entry>) : <div> string
   match tree
     Nil -> ""
     Cons(entry, rest) ->
-      val encoded_rest = encode_state_snapshot(rest)
+      val encoded_rest = encode_snapshot_entries(rest)
       if entry.schema == "respo/effect" then encoded_rest
       else append_snapshot_line(encode_snapshot_entry(entry), encoded_rest)
+
+pub fun encode_state_snapshot(tree : list<state_entry>) : <div> string
+  append_snapshot_line(runtime_snapshot_marker ++ "|" ++ runtime_snapshot_version.show, encode_snapshot_entries(tree))
 
 fun decode_snapshot_entry(line : string) : maybe<state_entry>
   match split(line, "|")
@@ -68,4 +74,16 @@ fun decode_snapshot_lines(lines : list<string>) : list<state_entry>
         Nothing -> decode_snapshot_lines(rest)
 
 pub fun decode_state_snapshot(snapshot : string) : list<state_entry>
-  if snapshot == "" then Nil else decode_snapshot_lines(split(snapshot, "\n"))
+  if snapshot == "" then Nil
+  else match split(snapshot, "\n")
+    Nil -> Nil
+    Cons(header, entries) ->
+      match split(header, "|")
+        Cons(marker, version_parts) ->
+          if marker != runtime_snapshot_marker then decode_snapshot_lines(Cons(header, entries))
+          else match version_parts
+            [version] -> match parse-int(version)
+              Just(value) -> if value == runtime_snapshot_version then decode_snapshot_lines(entries) else Nil
+              Nothing -> Nil
+            _ -> Nil
+        Nil -> decode_snapshot_lines(Cons(header, entries))

@@ -82,6 +82,18 @@ Replay entry 使用 `respo/replay:<action-schema>` 和 action codec version。pa
 
 从 snapshot recovery 切换到 replay recovery 会改变 entry schema。旧 state snapshot 无法可靠反推出原 action，因此允许一次性回退 `initial`；新 replay snapshot 产生后，后续 HMR/reload 正常恢复。
 
+### Runtime snapshot envelope
+
+完整 runtime snapshot 的第一行是 `respo/runtime-snapshot|1`。这是 transport format version，与每个 store entry 自己的 schema/version 分开：顶层版本决定如何拆解 snapshot，entry version 决定某个 typed store 是否能恢复。
+
+- 当前 decoder 继续读取旧的无 header、每行四字段 snapshot；下一次保存会自然写成 versioned envelope；
+- unknown 或 malformed 顶层版本会把整棵 runtime tree 安全回退为空，再由 component 使用各自的 `initial`；
+- 已识别格式中的单个 malformed entry 会被跳过，其他合法 entry 仍可恢复；
+- 空 runtime tree 也编码为 header，而不是无版本的空字符串；传入空字符串仍表示“没有 snapshot”；
+- `respo/effect` render metadata 不进入 snapshot，domain model 也不走这条持久化通道。
+
+浏览器继续使用现有 `koka-respo:component-state:v1` localStorage key，以便发现升级前保存的值。wire format 的后续演进由 snapshot envelope 管理，不由业务 view 或 store 调用点管理。
+
 ## 与 action observation 的区别
 
 Replay log 只属于一个明确选择 `replay_store(...)` 的 component store，并且只包含它自己的纯 typed actions。

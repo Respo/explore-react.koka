@@ -82,9 +82,9 @@
 - 业务模块已删除跨 feature key 读取/写入 child store 的 helper；scope/path API 只保留给 framework/runtime inspection 与 tests；
 - 父组件不再读取子组件 local store 做汇总；跨组件真正需要的数据应提升为 domain state；
 - 旧的 `demo/runtimebridge.kk` / `demo/runtimeowner.kk` 过渡层已经删除；
-- snapshot 使用 path + schema + version + payload；
+- snapshot 使用 `respo/runtime-snapshot|1` 顶层 envelope，entry 保持 path + schema + version + payload；decoder 兼容旧无 header 格式；
 - ordinary child ownership marker 会进入 snapshot；feature 恢复后可继续判断 stale child，旧版无 marker 的孤立 entry 不做不安全的 path 推断；
-- malformed snapshot、unknown schema 和 version mismatch 会安全回退；
+- unknown/malformed 顶层版本回退空树；单个 malformed entry、unknown schema 和 entry version mismatch 只回退相关状态；
 - replay store 使用 `respo/replay:<action-schema>` entry，从当前 `initial` 和 decoded component actions 恢复；
 - key segment 使用无碰撞 canonical encoding；现有 slug/数字路径保持不变，旧版空串、下划线开头或保留字符 key 的 snapshot 允许一次性回退 initial state；
 - `src/main.js` 在事件后合并保存，并在 HMR replacement、dispose、`pagehide` 前 flush；
@@ -156,10 +156,10 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ### 1. 版本化 runtime snapshot（#17）
 
-- 为完整 snapshot 增加顶层标识与格式版本，同时兼容读取现有无 envelope 格式；
-- unknown future version、malformed entry 和非法编码都必须安全回退，不阻断 app boot；
-- 继续保持 entry 级 schema/version 校验，不把 snapshot 参数带回业务 view；
-- 用 Koka compatibility tests 与浏览器 reload/HMR 恢复共同验收。
+- 当前实现批次：完整 snapshot 已增加 `respo/runtime-snapshot|1` header，并兼容读取现有无 envelope 格式；
+- unknown/malformed 顶层版本回退空树，malformed entry 与 entry 非法编码只丢弃自身，不阻断 app boot；
+- entry 级 schema/version 校验保持不变，业务 view 不增加 snapshot 参数或 runtime import；
+- Koka compatibility tests、旧 snapshot 浏览器启动、整页 reload 与真实 Vite HMR replacement 恢复均已完成验收。
 
 ### 2. 定义 effect cleanup 生命周期（#18）
 

@@ -86,6 +86,8 @@ Dialog overlay 这类全局 singleton 在关闭或 kind 改变时，可以由 in
 
 `respo/component-scope` marker 会随 state entry 一起进入 snapshot，因此 HMR 或整页 reload 后，runtime 仍然知道哪些 entry 属于普通 keyed child。`respo/effect` dependency entry 仍然不会持久化；effect 会在新 runtime 中重新建立。
 
+runtime snapshot 使用 `respo/runtime-snapshot|1` 顶层 header。decoder 仍兼容旧的无 header snapshot；unknown 顶层版本安全回退为空树，已识别格式中的单个 malformed entry 只丢弃自身。顶层 transport version 不替代 entry schema/version，两层分别负责 wire format 和 typed store recovery。
+
 旧版本 snapshot 没有 lifecycle marker。当前仍然渲染的 child 会在下一次 render 自动获得 marker；旧 snapshot 中已经孤立、且从未再次出现的 entry 无法可靠推断归属，因此不会用 path 猜测并删除。显式 feature reset 或后续 snapshot 版本迁移可以处理这类历史数据。
 
 Snapshot 仍然只是临时 UI 状态的 best-effort 恢复机制，不替代 domain persistence。

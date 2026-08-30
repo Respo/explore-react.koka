@@ -238,6 +238,7 @@ div([
 - 每次 app render 只安装一个 stateful component runtime；feature 通过 scoped vnode component 在同一 handler 内组合。
 - scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
+- 完整 snapshot 使用 `respo/runtime-snapshot|1` 顶层 header；decoder 兼容旧无 header 格式，unknown 顶层版本回退空树，单个 malformed entry 不影响其他合法 entry。
 - `respo/component-scope` 是 runtime-owned lifecycle marker，会进入 snapshot；业务模块不得读取、构造或修改。ordinary child sweep 由 framework visitation 驱动，不在 reducer 中重建 path。
 - replay entry 使用 `respo/replay:<action-schema>`，只由 `replay_store(...)` 读写；业务 view 仍只使用 `(state, dispatch) = use_store(...)`。恢复策略与选择标准见 `docs/store-recovery.md`。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
