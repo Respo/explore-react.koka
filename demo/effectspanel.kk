@@ -66,5 +66,5 @@ pub fun effects_panel(item : model, results : list<test_result>, key : string = 
     val cases = route_effect_cases(item, results)
     panel([
       div(cases, class = "case-grid"),
-    ], title = "Effects", note = effects_panel_note(item.route_name), key = feature_node_key(group = "effects", key = key), class_name = "effects-panel")
+    ], title = "Effects", note = effects_panel_note(item.route_name), key = feature_key(), class_name = "effects-panel")
   }

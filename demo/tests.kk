@@ -23,6 +23,7 @@ pub fun demo_test_results() : <div> list<test_result>
     feature_component_key_test(),
     state_tree_test(),
     component_key_canonicalization_test(),
+    ambient_feature_identity_test(),
     generic_state_codec_test(),
     malformed_store_payload_test(),
     auto_hook_scope_test(),

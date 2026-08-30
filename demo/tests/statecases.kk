@@ -54,6 +54,22 @@ pub fun component_key_canonicalization_test() : <div> test_result
     "numeric=" ++ numeric_path ++ ", underscore=" ++ underscored_path ++ ", empty=" ++ empty_path ++ ", special=" ++ special_path ++ ", marker=" ++ special_marker,
     collision_free && composite_keys_distinct && special_names_safe && safe_names_stable && legacy_task_path == "todo/panel/tasks/_2")
 
+pub fun ambient_feature_identity_test() : <div> test_result
+  val (resolved, _tree, _effects) = run_local_state(Nil, fn() {
+    feature_root(group = "feature", key = "left", render = fn() {
+      val root_key = feature_key()
+      val child_marker = component("child", "1") { feature_marker("draft") }
+      val nested_key = feature_root("feature", "right") { feature_key() }
+      val restored_marker = feature_marker("draft")
+      [root_key, child_marker, nested_key, restored_marker]
+    })
+  })
+  val passed = resolved == ["feature:left", "feature:left:draft", "feature:right", "feature:left:draft"]
+  Test_result(
+    "Feature identity stays inside its boundary",
+    "resolved=" ++ resolved.show,
+    passed)
+
 pub fun generic_state_codec_test() : <div> test_result
   val scope_name = component_local_path("tests", "implicit-codec")
   val ((draft, open_before), next_tree, _pending_effects) = run_local_state(Nil, fn() {

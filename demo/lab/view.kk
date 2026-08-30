@@ -22,10 +22,15 @@ fun status_class(item : incident) : string
     Status_investigating -> "incident-status incident-status-investigating"
     Status_firing -> "incident-status incident-status-firing"
 
-fun incident_card(item : incident, panel_key : string) : app_view vnode
+fun incident_card(item : incident) : app_view vnode
   val iid = incident/id(item)
   val (Incident_local_state(expanded, draft), dispatch_local) = use_store(incident_local_store, initial = Incident_local_state(False, ""))
-  val dispatch = fn(action, owner) dispatch_lab_action(action, owner, panel_key = panel_key)
+  val dispatch = fn(action, owner) dispatch_lab_action(action, owner)
+  val send_reply = fn(owner : model) {
+    val next = dispatch(Send_reply(iid, draft), owner)
+    if draft == "" then () else dispatch_local(Finish_incident_reply)
+    next
+  }
   val toggle_label = if expanded then "Collapse" else "Expand"
   val preview_text = if draft == "" then "local draft: <empty>" else "local draft: " ++ draft
   val collapsed_text = if draft == "" then "Draft is local and still empty." else "Draft saved locally for this card."
@@ -50,14 +55,14 @@ fun incident_card(item : incident, panel_key : string) : app_view vnode
     ], class = "incident-head"),
     div([
       button(toggle_label, class = "button", click = on_store_click("toggle-expanded", action = Toggle_incident, dispatch = dispatch_local)),
-      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", action = Change_incident_draft, dispatch = dispatch_local), enter = on_action_enter("send-reply", action = Send_reply(iid), dispatch = dispatch), placeholder = "Local reply draft, per card..."),
-      button("Send reply", class = "button button-primary", click = on_action_click("send-reply", action = Send_reply(iid), dispatch = dispatch)),
+      input_text(draft, key = "lab-draft-" ++ iid.show, class = "input incident-input", input = on_store_input("draft-input", action = Change_incident_draft, dispatch = dispatch_local), enter = on_local_enter("send-reply", send_reply), placeholder = "Local reply draft, per card..."),
+      button("Send reply", class = "button button-primary", click = on_local_click("send-reply", send_reply)),
     ], class = "incident-controls"),
     detail_node,
   ], key = "incident-" ++ iid.show, class = "incident-card")
 
-fun incident_grid(lab : workflow_lab, panel_key : string) : app_view vnode
-  div(components(lab.incidents, group = "incidents", key = fn(item) incident/id(item).show, render = fn(item) incident_card(item, panel_key = panel_key)), class = "incident-grid")
+fun incident_grid(lab : workflow_lab) : app_view vnode
+  div(components(lab.incidents, group = "incidents", key = fn(item) incident/id(item).show, render = incident_card), class = "incident-grid")
 
 fun activity_panel(lab : workflow_lab) : <div> vnode
   aside([
@@ -71,8 +76,8 @@ fun lab_panel_note(route_name : string) : string
   else if route_name == "lab-bridge" then "Bridge is isolated here so the staged shell/detail suspense-like behavior is not competing with the workflow board or search demo."
   else "Board keeps the incident workflow, local drafts, activity log, and staged sync actions together without the search and bridge demos crowding the same page."
 
-fun lab_panel_sections(route_name : string, lab : workflow_lab, panel_key : string) : app_view list<vnode>
-  val dispatch = fn(action, owner) dispatch_lab_action(action, owner, panel_key = panel_key)
+fun lab_panel_sections(route_name : string, lab : workflow_lab) : app_view list<vnode>
+  val dispatch = fn(action, owner) dispatch_lab_action(action, owner)
   if route_name == "lab-search" then
     [render_search_panel(
       lab.search_demo,
@@ -98,7 +103,7 @@ fun lab_panel_sections(route_name : string, lab : workflow_lab, panel_key : stri
         span("status: " ++ lab.sync_status, class = "mono"),
       ], class = "button-row"),
       div([
-        incident_grid(lab, panel_key = panel_key),
+        incident_grid(lab),
         activity_panel(lab),
       ], class = "lab-body-grid"),
     ]
@@ -112,6 +117,6 @@ pub fun lab_panel(item : model, key : string = "panel") : app_view vnode
         summary_chip("Open", length(filter(lab.incidents, fn(incident_item) match incident_item.status { Status_acked -> False; _ -> True })).show),
         summary_chip("Last sync", lab.last_sync_label),
       ], class = "summary-row"),
-    ] ++ lab_panel_sections(item.route_name, lab, panel_key = key)
-    panel(children, title = "Workflow lab", note = lab_panel_note(item.route_name), key = feature_node_key(group = "lab", key = key), class_name = "lab-panel")
+    ] ++ lab_panel_sections(item.route_name, lab)
+    panel(children, title = "Workflow lab", note = lab_panel_note(item.route_name), key = feature_key(), class_name = "lab-panel")
   }

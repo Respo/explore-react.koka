@@ -19,19 +19,13 @@ import explore/react/state
 pub fun lab_local_routing_test() : <div> test_result
   with with_test_browser(False, "T+120")
   val base = initial_model()(route_name = normalize_route("lab"))
-  val base_runtime_tree = app_harness(base).runtime_tree
-  val drafted = run_runtime_action(current_runtime_frame(base, base_runtime_tree), fn(owner) {
-    match route_lab_input("lab-draft-101", "Shift traffic to backup POP.", owner)
-      Just(result) -> result
-      Nothing -> owner
-  })
-  val toggled = run_runtime_action(drafted, fn(owner) {
-    match route_lab_click("lab-toggle-101", owner)
-      Just(result) -> result
-      Nothing -> owner
-  })
-  val toggled_runtime_tree = toggled.runtime_tree
-  Test_result("Workflow lab local routing", "draft=" ++ inspect_incident_draft(toggled_runtime_tree, 101) ++ ", expanded=" ++ inspect_incident_expanded(toggled_runtime_tree, 101).show, inspect_incident_draft(toggled_runtime_tree, 101) == "Shift traffic to backup POP." && inspect_incident_expanded(toggled_runtime_tree, 101))
+  val scope = component_child_path(component_local_path("lab", "panel"), "incidents", "101")
+  val input_channel = named_local_listener_path(scope, Input_event, "draft-input")
+  val toggle_payload = named_local_listener_path(scope, Click_event, "toggle-expanded")
+  val h0 = app_harness(base)
+  val h1 = app_harness_input_channel(h0, input_channel, "Shift traffic to backup POP.")
+  val h2 = app_harness_click_payload(h1, toggle_payload)
+  Test_result("Workflow lab local listeners", "draft=" ++ inspect_incident_draft(h2.runtime_tree, 101) ++ ", expanded=" ++ inspect_incident_expanded(h2.runtime_tree, 101).show, inspect_incident_draft(h2.runtime_tree, 101) == "Shift traffic to backup POP." && inspect_incident_expanded(h2.runtime_tree, 101))
 
 fun lab_feature_pair_render(frame : runtime_frame) : <div> component_harness
   val (next_frame, tree, effects, registry) = run_runtime_render(frame, fn(owner) run_stateful_component(owner, fn(current) div([
@@ -125,19 +119,18 @@ pub fun workflow_sync_test() : <div> test_result
 
 pub fun workflow_reply_test() : <div> test_result
   val base = initial_model()(route_name = normalize_route("lab"))
-  val (prepared_result, _prepared_actions) = capture_actions(fn() run_local_action(Nil, fn() {
-    dispatch_incident_local_action(102, Change_incident_draft("Shift replay traffic onto the cache-safe queue."))
-    base
-  }))
-  val (prepared, prepared_runtime_tree) = prepared_result
-  val ((next, next_runtime_tree), waits, _audits) = capture_workflow(fn() run_local_action(prepared_runtime_tree, fn() send_reply(prepared, 102)))
+  val message = "Shift replay traffic: cache-safe | queue."
+  val (next, waits, _audits) = capture_workflow(fn() send_reply(base, 102, message))
   val total = sum(waits)
   val lab = next.lab
-  val cleared = inspect_incident_draft(next_runtime_tree, 102) == ""
   val acked = match find(lab.incidents, fn(item) 102 == incident/id(item))
-    Just(item) -> (match item.status { Status_acked -> True; _ -> False }) && item.server_note == "Shift replay traffic onto the cache-safe queue."
+    Just(item) -> (match item.status { Status_acked -> True; _ -> False }) && item.server_note == message
     Nothing -> False
-  Test_result("Workflow reply clears local draft", "waits=" ++ total.show ++ "ms, drafts=" ++ length(filter(lab.incidents, fn(item) inspect_incident_draft(next_runtime_tree, incident/id(item)) != "")).show ++ ", status=" ++ lab.sync_status, cleared && acked && total == 60)
+  val envelope = encode_action(source = "domain", target = "lab", codec = lab_action_codec, action = Send_reply(102, message))
+  val roundtrip = match decode_action(lab_action_codec, envelope)
+    Just(Send_reply(incident_id, decoded_message)) -> incident_id == 102 && decoded_message == message
+    _ -> False
+  Test_result("Workflow reply action carries its message", "waits=" ++ total.show ++ "ms, action=" ++ envelope.schema ++ "@" ++ envelope.version.show ++ ", status=" ++ lab.sync_status, acked && roundtrip && total == 60)
 
 pub fun bridge_pending_test() : <div> test_result
   val (next, requests, audits) = capture_bridge_load(bridge_base_model(), "edge-auth")

@@ -1,10 +1,7 @@
 module demo/lab/workflow
 
 import demo/model
-import demo/lab/state
 import library/bridge
-import explore/react/action
-import explore/react/state
 
 fun append_lines(lines : list<string>, value : string) : <div> list<string>
   match lines
@@ -94,10 +91,9 @@ pub fun perform_sync(item : model) : <sync_host_effect,div> model
     last_sync_label = stamp)
   item(lab = next_lab, notice = "Workflow lab sync finished through algebraic effects.")
 
-pub fun send_reply(item : model, incident_id : int, panel_key : string = "panel") : <action_observation,reply_host_effect,local_state_read,local_state_write,div> model
+pub fun send_reply(item : model, incident_id : int, message : string) : <reply_host_effect,div> model
   val lab = item.lab
-  val draft = current_incident_local_state(incident_id, panel_key = panel_key).draft
-  if draft == "" then
+  if message == "" then
     item(notice = "Draft is empty for this incident card.")
   else
     match find(lab.incidents, fn(found) incident_id == incident/id(found))
@@ -105,12 +101,11 @@ pub fun send_reply(item : model, incident_id : int, panel_key : string = "panel"
       Just(_found) -> {
         audit("Sending workflow lab reply for incident #" ++ incident_id.show)
         wait_ms(40)
-        val server_reply = post_lab_reply(incident_id, draft)
+        val server_reply = post_lab_reply(incident_id, message)
         wait_ms(20)
         val stamp = now_label()
         val operator = current_operator
-        dispatch_incident_local_action(incident_id, Finish_incident_reply, panel_key = panel_key)
-        val next_incidents = update_incident_reply(lab.incidents, incident_id, draft, operator ++ " @ " ++ stamp)
+        val next_incidents = update_incident_reply(lab.incidents, incident_id, message, operator ++ " @ " ++ stamp)
         val next_logs = append_lines(lab.activity_log, "[" ++ stamp ++ "] " ++ server_reply)
         val next_lab = lab(incidents = next_incidents, activity_log = next_logs, sync_status = "reply-sent", last_sync_label = stamp)
         item(lab = next_lab, notice = "Workflow lab reply sent with mocked server effect.")
