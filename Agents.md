@@ -144,8 +144,10 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。
 - domain action 事件优先用 `on_action_click(name, action = ..., dispatch = ...)` / `on_action_input(...)` / `on_action_enter(...)`，不要在每个 element 内重复 forwarding closure。
 - 只有包含额外分支、组合更新或直接 model 输入的 handler 才使用 `on_local_*`。
-- 一个 store 把 state 类型、action 类型、纯 reducer 和 versioned codecs 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
-- `Store_spec(...)`、`State_codec(...)`、`Action_codec(...)` 的定义统一使用 labelled fields，显式写出 `name/schema/version/decode/encode/reduce`，不要依赖难以辨认的位置参数顺序。
+- 一个 store 把 state 类型、action 类型、纯 reducer、action codec 和显式 recovery policy 定义在一起；codec 只在 store 定义处出现，不传进组件调用。
+- store 统一通过 labelled `snapshot_store(...)` / `replay_store(...)` 构造，不让业务模块直接依赖 `Store_spec(...)` 的内部字段顺序。`State_codec(...)`、`Action_codec(...)` 仍显式写出 `schema/version/decode/encode`。
+- `snapshot_store(...)` 适合累积、toggle 或无法安全压缩的状态；`replay_store(...)` 只适合有明确 session 边界的纯 component actions，并使用 `Replay_start` / `Replay_replace(slot)` / `Replay_reset` 声明恢复语义。
+- replay slot 必须是有限、稳定的语义名称；不要用动态业务 id/用户输入制造 slot，也不要通过丢弃最早 action 强行限制日志。无法安全压缩时回到 snapshot store。
 - scope/path/slot/tree 属于 framework/runtime 细节；业务 view 只声明 keyed boundary，不手工拼 path。
 - 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
 - `component(...)` / `components(...)` 表示 ordinary child：当前 feature 仍 render、但 child 不再出现时，其 local store 与 effect metadata 会自动清理。filter/条件分支隐藏 child 等同 unmount。
@@ -193,7 +195,7 @@ button(
 - component store 由 `use_store(...)` 返回的 dispatch 自动发 observation，业务 view 不重复埋点。
 - app/runtime 边界通过 `run_runtime_action_observed(...)` 获取有序 action 列表；不需要观察的测试或内部调用使用 `run_runtime_action(...)`。
 - observation 表示“已发送 intent”，不表示 reducer 成功或外部 effect 已提交。confirm 拒绝的 action 仍可被观察。
-- 未建立权限、effect response 和幂等策略前，不自动 replay，也不把 action log 混入 component-state snapshot。
+- `replay_store(...)` 的 scoped pure component-action log 可以进入 component snapshot，但与统一 observation stream 分开；未建立权限、effect response 和幂等策略前，不自动 replay domain/external-effect actions。
 - 新增 domain action 时，codec 与 action/reducer 放在同一 feature 模块，并覆盖 schema/version/payload 的 round-trip 测试。
 
 ## Element 调用约定
@@ -219,6 +221,7 @@ div([
 - scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
 - `respo/component-scope` 是 runtime-owned lifecycle marker，会进入 snapshot；业务模块不得读取、构造或修改。ordinary child sweep 由 framework visitation 驱动，不在 reducer 中重建 path。
+- replay entry 使用 `respo/replay:<action-schema>`，只由 `replay_store(...)` 读写；业务 view 仍只使用 `(state, dispatch) = use_store(...)`。恢复策略与选择标准见 `docs/store-recovery.md`。
 - `src/main.js` 负责 localStorage 与 Vite HMR hand-off。修改浏览器桥时要验证 replacement 前 flush、dispose 和 `pagehide` 三条路径。
 - snapshot 只是组件临时状态恢复机制，不替代业务数据持久化。
 - lifecycle 规则和旧 snapshot 兼容限制见 `docs/component-lifecycle.md`。

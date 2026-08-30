@@ -143,11 +143,42 @@ pub fun generic_state_codec_test() : <div> test_result
   val open_after = read_named_local_state(next_tree, scope_name, "open", False)
   Test_result("Implicit use_state codec", "draft=" ++ draft ++ ", open-before=" ++ open_before.show ++ ", open-after=" ++ open_after.show, draft == "hello" && not(open_before) && draft_after == "hello world" && open_after)
 
+pub fun replay_empty_payload_test() : <div> test_result
+  val scope_name = component_local_path("tests", "empty-replay-payload")
+  val empty_codec = Action_codec(
+    schema = "tests/empty-action",
+    version = 1,
+    decode = fn(version, payload) if version == 1 then Just(payload) else Nothing,
+    encode = fn(value : string) value)
+  val empty_store : store_spec<string,string> = replay_store(
+    name = "empty",
+    action_codec = empty_codec,
+    replay = fn(_action) Replay_start,
+    reduce = fn(_current, action) action)
+  val (run, _observed) = capture_actions(fn() run_local_state(Nil, fn() feature_root("tests", "empty-replay-payload") {
+    val (_current, dispatch) = use_store(empty_store, initial = "fallback")
+    dispatch("")
+  }))
+  val (_unit, tree, _effects) = run
+  val restored = read_store_state(
+    decode_state_snapshot(encode_state_snapshot(tree)),
+    scope_name,
+    empty_store,
+    "fallback")
+  val framed = match find(tree, fn(entry) entry.path == named_local_state_path(scope_name, "empty"))
+    Just(entry) -> entry.payload == "a"
+    Nothing -> False
+  Test_result("Replay framing preserves empty action payload", "restored='" ++ restored ++ "', framed=" ++ framed.show, restored == "" && framed)
+
 pub fun malformed_store_payload_test() : <div> test_result
   val todo_scope = "tests/malformed-todo"
   val todo_initial = Task_editor_state(False, "todo fallback")
-  val todo_tree = [State_entry(named_local_state_path(todo_scope, "editor"), "todo/task-editor", 1, "")]
+  val todo_tree = [State_entry(named_local_state_path(todo_scope, "editor"), "respo/replay:todo/task-editor-action", 1, "%")]
   val todo_state = read_store_state(todo_tree, todo_scope, task_editor_store, todo_initial)
+  val todo_version_tree = [State_entry(named_local_state_path(todo_scope, "editor"), "respo/replay:todo/task-editor-action", 9, "bOld")]
+  val todo_version_state = read_store_state(todo_version_tree, todo_scope, task_editor_store, todo_initial)
+  val todo_legacy_tree = [State_entry(named_local_state_path(todo_scope, "editor"), "todo/task-editor", 1, "1Old")]
+  val todo_legacy_state = read_store_state(todo_legacy_tree, todo_scope, task_editor_store, todo_initial)
   val todo_action_safe = match decode_store_action(task_editor_store, Action_envelope(source = "component", target = todo_scope, schema = "todo/task-editor-action", version = 1, payload = ""))
     Nothing -> True
     _ -> False
@@ -160,7 +191,7 @@ pub fun malformed_store_payload_test() : <div> test_result
     _ -> False
   val malformed_snapshot_safe = is-empty(decode_state_snapshot("path|schema|1|bad%"))
   val empty_snapshot_payload_valid = length(decode_state_snapshot("path|schema|1|")) == 1
-  val passed = todo_state.draft == "todo fallback" && lab_state.draft == "lab fallback" && todo_action_safe && lab_action_safe && malformed_snapshot_safe && empty_snapshot_payload_valid
+  val passed = todo_state.draft == "todo fallback" && todo_version_state.draft == "todo fallback" && todo_legacy_state.draft == "todo fallback" && lab_state.draft == "lab fallback" && todo_action_safe && lab_action_safe && malformed_snapshot_safe && empty_snapshot_payload_valid
   Test_result("Malformed store payloads are rejected", "todo=" ++ todo_action_safe.show ++ ", lab=" ++ lab_action_safe.show ++ ", snapshot=" ++ malformed_snapshot_safe.show, passed)
 
 pub fun auto_hook_scope_test() : <div> test_result

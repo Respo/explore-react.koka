@@ -32,7 +32,7 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
     ()
   })))
   val (_sequential_before, sequential_tree, _sequential_effects) = sequential_run
-  val sequential = read_store_state(sequential_tree, scope_name, task_editor_store, initial)
+  val settled = read_store_state(sequential_tree, scope_name, task_editor_store, initial)
   val message = encode_store_action(scope_name, task_editor_store, Change_draft("Next | draft"))
   val action_roundtrip = match decode_store_action(task_editor_store, message)
     Just(Change_draft(value)) -> value == "Next | draft"
@@ -40,9 +40,9 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
   val version_guard = match decode_store_action(task_editor_store, message(version = 9))
     Nothing -> True
     _ -> False
-  val versioned_cell = any(tree, fn(entry) {
+  val versioned_replay_cell = any(tree, fn(entry) {
     entry.path == named_local_state_path(scope_name, "editor") &&
-    entry.schema == "todo/task-editor" &&
+    entry.schema == "respo/replay:todo/task-editor-action" &&
     entry.version == 1
   })
   val observed_store_action = match first_actions
@@ -54,9 +54,44 @@ pub fun todo_editor_store_protocol_test() : <div> test_result
     Just(Save_task(decoded_title)) -> decoded_title == saved_title
     _ -> False
   Test_result(
-    "Todo editor uses typed store protocol",
+    "Todo editor uses replay-backed typed store protocol",
     "editing=" ++ current.editing.show ++ ", draft=" ++ current.draft ++ ", action=" ++ message.schema ++ "@" ++ message.version.show ++ ", save=" ++ save_envelope.version.show,
-    current.editing && current.draft == "Draft | with separator" && restored.draft == current.draft && not(sequential.editing) && sequential.draft == "Sequential draft" && is-empty(decode_state_snapshot("bad%|schema|1|payload")) && action_roundtrip && version_guard && versioned_cell && observed_store_action && save_roundtrip)
+    current.editing && current.draft == "Draft | with separator" && restored.draft == current.draft && not(settled.editing) && settled.draft == initial.draft && is-empty(decode_state_snapshot("bad%|schema|1|payload")) && action_roundtrip && version_guard && versioned_replay_cell && observed_store_action && save_roundtrip)
+
+pub fun todo_editor_replay_session_test() : <div> test_result
+  val scope_name = component_local_path("tests", "editor-session")
+  val initial = Task_editor_state(False, "Initial title")
+  val (editing_run, observed) = capture_actions(fn() run_local_state(Nil, fn() feature_root("tests", "editor-session") {
+    val (_current, dispatch) = use_store(task_editor_store, initial = initial)
+    dispatch(Begin_edit(initial.draft))
+    dispatch(Change_draft("first draft"))
+    dispatch(Change_draft("second draft"))
+    dispatch(Change_draft("final draft"))
+  }))
+  val (_editing_unit, editing_tree, _editing_effects) = editing_run
+  val current_editor = read_store_state(editing_tree, scope_name, task_editor_store, initial)
+  val restored = read_store_state(
+    decode_state_snapshot(encode_state_snapshot(editing_tree)),
+    scope_name,
+    task_editor_store,
+    initial)
+  val compacted = match find(editing_tree, fn(entry) entry.path == named_local_state_path(scope_name, "editor"))
+    Just(entry) -> split(entry.payload, "\n").length == 2
+    Nothing -> False
+  val saved_initial = Task_editor_state(False, "Saved title")
+  val (settled_run, _finish_observed) = capture_actions(fn() run_local_state(editing_tree, fn() feature_root("tests", "editor-session") {
+    val (_current, dispatch) = use_store(task_editor_store, initial = saved_initial)
+    dispatch(Finish_edit)
+  }))
+  val (_settled_unit, settled_tree, _settled_effects) = settled_run
+  val settled = read_store_state(settled_tree, scope_name, task_editor_store, saved_initial)
+  val session_reset = match find(settled_tree, fn(entry) entry.path == named_local_state_path(scope_name, "editor"))
+    Just(entry) -> entry.payload == ""
+    Nothing -> True
+  Test_result(
+    "Todo replay session replaces drafts and resets after finish",
+    "actions=" ++ observed.length.show ++ ", compacted=" ++ compacted.show ++ ", draft=" ++ restored.draft ++ ", settled=" ++ settled.draft,
+    observed.length == 4 && current_editor.editing && current_editor.draft == "final draft" && restored.draft == "final draft" && compacted && not(settled.editing) && settled.draft == "Saved title" && session_reset)
 
 pub fun unified_action_observation_test() : <div> test_result
   with with_test_browser(False, "T+0")
