@@ -14,6 +14,8 @@ import library/bridge
 import library/route
 import explore/react/action
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 noinline val root_id_ref : ref<global,string> = unsafe-total { ref("app") }
 noinline val frame_ref : ref<global,runtime_frame> = unsafe-total { ref(current_runtime_frame(initial_model(), Nil)) }

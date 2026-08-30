@@ -170,9 +170,9 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ### 3. 拆分 component facade 与 runtime/testing API
 
-- 将普通组件需要的 `component/components/use_store/state_effect/on_*` 收敛到 facade；
-- 将 runner、registry、snapshot 与 tree inspection 移到 runtime/testing 模块；
-- opaque feature identity 已进入 `feature_root`；下一步把显式 key/path inspection API 物理拆到 runtime/testing module；
+- 普通组件的 authoring surface 已明确收敛在 `core/action/state`，不额外增加只做转发的 facade；
+- registered callback runner、scheduled effect、snapshot transport 已物理移到 `explore/react/runtime`；VDOM、event registry 与 entry count 查询已物理移到 `explore/react/inspection`；
+- opaque feature identity 已进入 `feature_root`；显式 key/path 与 store inspection 目前仍和 state tree 实现共享私有依赖，只有能移动真实实现且不产生单行 forwarding wrapper 时再继续拆分；
 - 为 controlled component 固定“主 domain value 位置参数 + labelled callback/config props”的签名模板，避免每个 feature 再造 props adapter；
 - scope 计算只保留在确有跨组件协调的 state 模块；
 - reducer、codec、store spec 尽量同模块定义，view 只 import typed surface；
@@ -200,8 +200,8 @@ issue、PR 及影响结论的进度更新统一使用中英双语：标题采用
 - [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
 - [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：已由 PR #14 合并；snapshot/replay recovery 选择与 Todo editor session 语义已落地；
 - [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
-- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：当前实现批次；以四个真实调用点、action 顺序测试和组件定义可读性作为是否保留公共 API 的标准；
-- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：等待 #12 的 transition API 完成使用者评估后，整理 quick start、authoring API 与 module 边界。
+- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：已由 PR #15 合并；四个真实调用点共享 event-independent transition，并覆盖 action 顺序与浏览器回归；
+- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：当前实现批次；以四概念 quick start、单页 author API、advanced module import 边界作为验收标准。
 
 ## 验证标准
 

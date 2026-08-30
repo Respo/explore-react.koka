@@ -11,6 +11,7 @@ import library/dialog
 import library/route
 import explore/react/core
 import explore/react/state
+import explore/react/inspection
 
 pub fun dialog_alert_open_test() : <div> test_result
   with with_test_browser(False, "T+0")

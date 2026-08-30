@@ -15,6 +15,8 @@ import explore/react/action
 import explore/react/core
 import explore/react/renderer
 import explore/react/state
+import explore/react/runtime
+import explore/react/inspection
 
 fun timer_logic() : <browser_host> string
   wait_ms(20)
