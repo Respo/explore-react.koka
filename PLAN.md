@@ -152,56 +152,48 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ## 下一阶段
 
-### 1. 收紧 store schema 与迁移策略
+按用户风险与依赖顺序推进，不并行扩张公共 API：
 
-- 为 snapshot format 增加明确的顶层版本，而不只依赖 entry version；
-- 梳理 state/action codec 的升级路径和兼容窗口；
-- 评估是否提供框架级 codec combinators，减少 feature 手写 encode/decode；
-- 保持 decoder 失败时回退 initial state，不让单个坏 entry 阻断 boot。
+### 1. 版本化 runtime snapshot（#17）
 
-### 2. 评估 replay authoring 与权限策略
+- 为完整 snapshot 增加顶层标识与格式版本，同时兼容读取现有无 envelope 格式；
+- unknown future version、malformed entry 和非法编码都必须安全回退，不阻断 app boot；
+- 继续保持 entry 级 schema/version 校验，不把 snapshot 参数带回业务 view；
+- 用 Koka compatibility tests 与浏览器 reload/HMR 恢复共同验收。
 
-- Todo editor 已用显式 start/replace/reset policy 验证 session 型 replay；下一步先按 #8 的使用者标准评估定义规模与 HMR 行为，再决定是否推广；
-- 只有天然有界 session 使用 component replay，不能安全压缩的 store 保持 snapshot；
-- 外部 effect action 默认只允许 inspect，replay 需要 capability/permission；
-- 定义 confirmation、request、timer 等 effect 的 recorded response 与去重策略；
-- agent/domain action log persistence 与 scoped component replay entry 分开版本、权限和保留周期；
-- devtools/agents 只能通过已注册 codec 解码和投递，不能写 raw state tree。
+### 2. 定义 effect cleanup 生命周期（#18）
 
-### 3. 拆分 component facade 与 runtime/testing API
+- 为 component author 提供清晰的 setup + cleanup authoring shape；
+- 明确 deps change、ordinary child unmount、feature reset 与 runtime replacement 的 cleanup 顺序；
+- snapshot flush 先于旧 runtime cleanup，cleanup closure 不进入 snapshot；
+- 用一个真实 demo capability、deterministic tests 与浏览器 HMR 回归验证。
 
-- 普通组件的 authoring surface 已明确收敛在 `core/action/state`，不额外增加只做转发的 facade；
-- registered callback runner、scheduled effect、snapshot transport 已物理移到 `explore/react/runtime`；VDOM、event registry 与 entry count 查询已物理移到 `explore/react/inspection`；
-- opaque feature identity 已进入 `feature_root`；显式 key/path 与 store inspection 目前仍和 state tree 实现共享私有依赖，只有能移动真实实现且不产生单行 forwarding wrapper 时再继续拆分；
-- 为 controlled component 固定“主 domain value 位置参数 + labelled callback/config props”的签名模板，避免每个 feature 再造 props adapter；
-- scope 计算只保留在确有跨组件协调的 state 模块；
-- reducer、codec、store spec 尽量同模块定义，view 只 import typed surface；
-- typed action listener 后续只在出现第三种重复事件形态时扩 API。
+### 3. 发布 agent-safe store/action surface（#19）
 
-### 4. 完善 effect 生命周期
+- 暴露可序列化的只读 catalog，不暴露 raw state entry、closure 或 tree write；
+- action dispatch 必须通过已注册 codec 校验，并复用现有 typed reducer/observation 链路；
+- 明确区分 domain action、ephemeral component action 与默认不可投递 capability；
+- 自动 replay、完整权限 UI 和远程身份认证继续保持非目标。
 
-- 重新评估 `state_effect(...)` cleanup 契约；
-- effect metadata 已跟随 ordinary component identity 执行 unmount sweep；下一步定义真正的 cleanup callback 契约；
-- HMR 前确认旧 runtime 的 cleanup、snapshot flush 和新 runtime boot 顺序；
-- 继续保持 browser host 只负责能力实现，不接管 feature workflow。
+### 持续约束
 
-### 5. Devtools / agent-facing store surface
-
-- 暴露只读的 store catalog：scope、schema、version 和可显示的 state；
-- action dispatch 必须通过已注册 codec 校验；
-- 区分 domain action 与 ephemeral component action；
-- 给敏感或不可重放 action 增加 capability/permission 边界；
-- 在工具协议稳定前，不把 runtime tree 的内部 wire format 当成公共 API。
+- component authoring surface 保持在 `core/action/state`，不增加只做转发的 facade；
+- controlled component 继续使用“主 domain value 位置参数 + labelled callback/config props”；
+- 显式 key/path/store inspection 只有在能移动真实实现且不产生单行 wrapper 时再拆；
+- typed listener helper 只在出现第三个真实重复形态时扩展。
 
 ## GitHub 跟踪
 
 issue、PR 及影响结论的进度更新统一使用中英双语：标题采用 `中文 / English`，正文分别写成完整的 `# 中文` 与 `# English` 章节，避免逐行混排，确保两部分都能独立用于跟踪。
 
-- [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
+- [#7 隐藏 feature identity 并移除跨组件 store path 协调 / Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
 - [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：已由 PR #14 合并；snapshot/replay recovery 选择与 Todo editor session 语义已落地；
-- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
+- [#9 定义不可达 child component store 的生命周期清理 / Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
 - [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：已由 PR #15 合并；四个真实调用点共享 event-independent transition，并覆盖 action 顺序与浏览器回归；
-- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：当前实现批次；以四概念 quick start、单页 author API、advanced module import 边界作为验收标准。
+- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：已由 PR #16 合并；四概念 quick start、单页 author API 与 advanced module import 边界已落地；
+- [#17 版本化 runtime snapshot 并定义兼容迁移 / Version runtime snapshots and define compatible migration](https://github.com/Respo/explore-react.koka/issues/17)：下一实现批次；先固定 snapshot envelope、legacy compatibility 与安全回退；
+- [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：排在 #17 之后，依赖明确的 HMR snapshot/boot 边界；
+- [#19 发布 agent-safe store catalog 与校验 action dispatch / Publish an agent-safe store catalog and validated action dispatch](https://github.com/Respo/explore-react.koka/issues/19)：后续探索批次；在不暴露 raw runtime tree 的前提下服务 devtools/agents。
 
 ## 验证标准
 
