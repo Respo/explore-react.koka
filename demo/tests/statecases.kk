@@ -170,6 +170,54 @@ pub fun replay_empty_payload_test() : <div> test_result
     Nothing -> False
   Test_result("Replay framing preserves empty action payload", "restored='" ++ restored ++ "', framed=" ++ framed.show, restored == "" && framed)
 
+pub fun action_store_transition_test() : <div> test_result
+  val scope_name = component_local_path("tests", "action-store-transition")
+  val transition_codec : action_codec<string> = Action_codec(
+    schema = "tests/transition-action",
+    version = 1,
+    decode = fn(version, payload) if version == 1 then Just(payload) else Nothing,
+    encode = fn(value : string) value)
+  val transition_store : store_spec<string,string> = replay_store(
+    name = "transition",
+    action_codec = transition_codec,
+    replay = fn(_action) Replay_start,
+    reduce = fn(_current, action) action)
+  val dispatch_domain = fn(action : string, owner : string) {
+    emit_action(
+      source = "domain",
+      target = "tests/transition",
+      codec = transition_codec,
+      action = action)
+    owner ++ action
+  }
+  val (run, observed) = capture_actions(fn() run_local_state(Nil, fn() feature_root("tests", "action-store-transition") {
+    val (_current, dispatch_store) = use_store(transition_store, initial = "idle")
+    val complete = action_store_transition(
+      "save",
+      dispatch = dispatch_domain,
+      store_action = "finish",
+      store = dispatch_store)
+    val rejected = action_store_transition(
+      "invalid",
+      dispatch = dispatch_domain,
+      store_action = "ignored",
+      store = dispatch_store,
+      store_when = False)
+    rejected(complete("owner:"))
+  }))
+  val (next_owner, tree, _effects) = run
+  val next_store = read_store_state(tree, scope_name, transition_store, "idle")
+  val ordered = match observed
+    [domain_save, component_finish, domain_invalid] ->
+      domain_save.source == "domain" && domain_save.payload == "save" &&
+      component_finish.source == "component" && component_finish.payload == "finish" &&
+      domain_invalid.source == "domain" && domain_invalid.payload == "invalid"
+    _ -> False
+  Test_result(
+    "Domain/store transition preserves typed action order",
+    "owner=" ++ next_owner ++ ", store=" ++ next_store ++ ", actions=" ++ observed.length.show,
+    next_owner == "owner:saveinvalid" && next_store == "finish" && ordered)
+
 pub fun malformed_store_payload_test() : <div> test_result
   val todo_scope = "tests/malformed-todo"
   val todo_initial = Task_editor_state(False, "todo fallback")

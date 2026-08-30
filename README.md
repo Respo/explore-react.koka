@@ -29,6 +29,7 @@ JavaScript hot replacement or be restored from `localStorage`.
 | local reducer | `(state, dispatch) = use_store(spec, initial=...)` |
 | local dispatch | `dispatch(action)` or `on_store_*` |
 | app reducer/action | `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` |
+| domain + local transition | `action_store_transition(...)` reused by `on_local_click(...)` / `on_local_enter(...)` |
 | `useEffect`-like hook | `state_effect(name=..., deps=..., action=...)` |
 | Context-like value | a Koka `val` effect |
 | browser/service capability | a Koka `fun` effect |
@@ -301,18 +302,28 @@ value into the serializable action. The domain workflow never looks the child
 store up by scope:
 
 ```koka
-val save_edit = fn(owner : model) {
-  val next = dispatch(Save_task(draft), owner)
-  if draft == "" then () else dispatch_editor(Finish_edit)
-  next
-}
+val save_edit = action_store_transition(
+  Save_task(draft),
+  dispatch = dispatch,
+  store_action = Finish_edit,
+  store = dispatch_editor,
+  store_when = draft != "")
 
 button("Save", click = on_local_click("save-edit", save_edit))
 ```
 
-This is the intended use of `on_local_*`: one event coordinates a domain intent
-and its own component-store transition. The domain action remains complete
-enough for inspection, persistence, or a future agent to submit directly.
+`action_store_transition(...)` is intentionally independent of the DOM event,
+so the same transition can be registered for both click and Enter. It always
+sends the complete domain action first. `store_when` controls only whether the
+single component-store action follows; it never suppresses the domain intent.
+The domain action remains complete enough for inspection, persistence, or a
+future agent to submit directly.
+
+Use this builder only for the repeated one-domain-action/one-store-action shape.
+Keep `on_local_*` for direct model updates, multiple local actions, or branching
+that cannot be stated as one `store_when` condition. See
+[`docs/action-store-transitions.md`](docs/action-store-transitions.md) for the
+decision guide, ordering contract, and complete examples.
 
 ## Listener identity and event dispatch
 
@@ -323,6 +334,7 @@ kind and a semantic name, for example:
 on_action_click("set-done", action = Set_filter("done"), dispatch = dispatch)
 on_action_input("change-query", action = Change_search_query, dispatch = dispatch)
 on_action_enter("add-task", action = Add_task, dispatch = dispatch)
+action_store_transition(Save_task(draft), dispatch = dispatch, store_action = Finish_edit, store = dispatch_editor, store_when = draft != "")
 on_local_input("draft-input", fn(value, owner) ...)
 ```
 
@@ -346,6 +358,8 @@ Store listeners are intentionally a narrower convenience layer:
 - `on_store_input(...)` converts the input string into one typed local action;
 - `on_action_*` dispatches typed domain actions and can still expose reducer
   effects;
+- `action_store_transition(...)` builds one event-independent handler that
+  sends a domain action and then optionally one component-store action;
 - `on_local_*` remains available when an event needs custom component logic.
 
 ## Serializable action observation

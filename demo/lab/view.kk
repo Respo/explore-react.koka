@@ -26,11 +26,7 @@ fun incident_card(item : incident) : app_view vnode
   val iid = incident/id(item)
   val (Incident_local_state(expanded, draft), dispatch_local) = use_store(incident_local_store, initial = Incident_local_state(False, ""))
   val dispatch = fn(action, owner) dispatch_lab_action(action, owner)
-  val send_reply = fn(owner : model) {
-    val next = dispatch(Send_reply(iid, draft), owner)
-    if draft == "" then () else dispatch_local(Finish_incident_reply)
-    next
-  }
+  val send_reply = action_store_transition(Send_reply(iid, draft), dispatch = dispatch, store_action = Finish_incident_reply, store = dispatch_local, store_when = draft != "")
   val toggle_label = if expanded then "Collapse" else "Expand"
   val preview_text = if draft == "" then "local draft: <empty>" else "local draft: " ++ draft
   val collapsed_text = if draft == "" then "Draft is local and still empty." else "Draft saved locally for this card."
