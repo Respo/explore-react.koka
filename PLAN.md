@@ -196,10 +196,10 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 issue、PR 及影响结论的进度更新统一使用中英双语：标题采用 `中文 / English`，正文分别写成完整的 `# 中文` 与 `# English` 章节，避免逐行混排，确保两部分都能独立用于跟踪。
 
 - [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：已由 PR #10 合并；
-- [#8 Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：当前实现批次；以 Todo editor 的定义成本与恢复体验作为是否推广的标准；
+- [#8 减少 typed store 样板代码并显式选择 replay 恢复 / Reduce typed store boilerplate with explicit replay recovery](https://github.com/Respo/explore-react.koka/issues/8)：当前实现批次；以 Todo editor 的定义成本与恢复体验作为是否推广的标准；
 - [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
-- [#12 Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：等待 #8 明确 session 完成语义后再评估公共 abstraction；
-- [#13 Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：在 recovery API 稳定后整理 quick start、authoring API 与 module 边界。
+- [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：等待 #8 明确 session 完成语义后再评估公共 abstraction；
+- [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：在 recovery API 稳定后整理 quick start、authoring API 与 module 边界。
 
 ## 验证标准
 
