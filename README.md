@@ -91,13 +91,13 @@ Component props and element attributes remain flat labelled arguments.
 For repeated children, `components(...)` owns the keyed component boundary:
 
 ```koka
-fun incident_grid(lab : workflow_lab, panel_key : string) : app_view vnode
+fun incident_grid(lab : workflow_lab) : app_view vnode
   div(
     components(
       lab.incidents,
       group = "incidents",
       key = fn(item) incident/id(item).show,
-      render = fn(item) incident_card(item, panel_key = panel_key)),
+      render = incident_card),
     class = "incident-grid")
 ```
 
@@ -115,7 +115,7 @@ pub fun todo_panel(
   feature_root("todo", key) {
     panel(
       [...],
-      key = feature_node_key(group = "todo", key = key))
+      key = feature_key())
   }
 ```
 
@@ -140,14 +140,11 @@ todo_panel(todo_panel_state_of(item), key = "compact")
 That key isolates local stores, effects, listeners, and DOM effect markers.
 Domain data is still shared when both instances receive values derived from the
 same application model, just as two controlled React components can receive the
-same props. Any feature code that coordinates a child store outside its render
-function must carry the same feature key; raw scope paths stay inside the state
-module.
-
-`feature_node_key(group = ..., key = ...)` and
-`feature_dom_marker(group = ..., key = ..., name = ...)` centralize the matching
-VDOM/DOM naming rule. The default instance keeps its established browser names;
-additional instances receive a group-prefixed name automatically.
+same props. `feature_root(...)` installs opaque ambient identity, so descendants
+derive a sibling VDOM key with `feature_key()` and a DOM effect marker with
+`feature_marker(name)` without receiving `panel_key` props. The default instance
+keeps its established browser names; additional instances receive a
+group-prefixed name automatically.
 
 Key segments use collision-free URI encoding. Existing non-empty slugs and
 numeric IDs keep their established runtime paths. Snapshots created with the
@@ -250,9 +247,8 @@ button(
 ```
 
 The codecs are defined once beside the store. They are not passed through every
-component call. Explicit scope/path/tree access is reserved for framework code
-and the small amount of feature coordination that must address a component
-outside its render function.
+component call. Explicit scope/path/tree access is reserved for framework and
+testing code.
 
 Feature render and panel APIs return only `vnode`. The app boundary owns the
 runtime tree through `runtime_frame`, and one `run_component(...)` pass collects
@@ -265,15 +261,33 @@ components should prefer a typed store when state can be changed by user
 events. This keeps updates action-shaped, observable, and compatible with
 future agent-driven action/store tooling.
 
+When a domain action needs a current component value, the component puts that
+value into the serializable action. The domain workflow never looks the child
+store up by scope:
+
+```koka
+val save_edit = fn(owner : model) {
+  val next = dispatch(Save_task(draft), owner)
+  if draft == "" then () else dispatch_editor(Finish_edit)
+  next
+}
+
+button("Save", click = on_local_click("save-edit", save_edit))
+```
+
+This is the intended use of `on_local_*`: one event coordinates a domain intent
+and its own component-store transition. The domain action remains complete
+enough for inspection, persistence, or a future agent to submit directly.
+
 ## Listener identity and event dispatch
 
 State and listener identity use stable component scopes. Listeners add an event
 kind and a semantic name, for example:
 
 ```koka
-on_action_click("save-edit", action = Save_task, dispatch = dispatch)
+on_action_click("set-done", action = Set_filter("done"), dispatch = dispatch)
 on_action_input("change-query", action = Change_search_query, dispatch = dispatch)
-on_action_enter("save-edit", action = Save_task, dispatch = dispatch)
+on_action_enter("add-task", action = Add_task, dispatch = dispatch)
 on_local_input("draft-input", fn(value, owner) ...)
 ```
 
@@ -310,7 +324,7 @@ Action_envelope(
   source = "domain",       // or "component"
   target = "todo/tasks/2",
   schema = "todo/task-action",
-  version = 1,
+  version = 2,
   payload = "e")
 ```
 

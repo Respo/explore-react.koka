@@ -2,6 +2,24 @@ module explore/react/action
 
 pub struct action_codec<a>(schema : string, version : int, decode : (int, string) -> maybe<a>, encode : (a) -> string)
 
+inline extern escape_action_field(text : string) : string
+  js inline "encodeURIComponent(#1)"
+
+inline extern unescape_action_field(text : string) : string
+  js inline "((s) => { try { return decodeURIComponent(s); } catch (_) { return ''; } })(#1)"
+
+inline extern valid_action_field(text : string) : bool
+  js inline "((s) => { try { decodeURIComponent(s); return true; } catch (_) { return false; } })(#1)"
+
+// Action codecs often need to carry more than one string while keeping the
+// envelope JSON-free and deterministic. Fields are escaped independently so a
+// feature codec can safely join them with a visible delimiter.
+pub fun encode_action_field(text : string) : string
+  escape_action_field(text)
+
+pub fun decode_action_field(text : string) : maybe<string>
+  if valid_action_field(text) then Just(unescape_action_field(text)) else Nothing
+
 // One wire-friendly shape for both domain and component actions. `source`
 // distinguishes ownership without coupling observation to reducer routing.
 pub struct action_envelope(source : string, target : string, schema : string, version : int, payload : string)

@@ -17,8 +17,11 @@ pub effect hook_effects
 
 pub effect hook_scope
   fun push_hook_scope(scope_name : string) : ()
+  fun push_feature_scope(group_name : string, key_name : string) : ()
   fun pop_hook_scope() : ()
   fun current_hook_scope_name() : string
+  fun resolve_feature_key(default_key : string) : string
+  fun resolve_feature_marker(name : string, default_key : string) : string
 
 pub effect component_runtime
   fun get_component_state_entries() : list<state_entry>
@@ -67,7 +70,12 @@ pub struct scheduled_effect(path : string, run : () -> io ())
 pub struct registered_click<s,e::E>(id : string, semantic_name : string, run : (s) -> <div|e> s)
 pub struct registered_input<s,e::E>(id : string, semantic_name : string, run : (string, s) -> <div|e> s)
 pub struct event_registry<s,e::E>(clicks : list<registered_click<s,e>>, inputs : list<registered_input<s,e>>, warnings : list<string>)
-struct hook_frame(scope_name : string, next_state_index : int, next_effect_index : int)
+struct hook_frame(
+  scope_name : string,
+  next_state_index : int,
+  next_effect_index : int,
+  feature_group_name : string,
+  feature_key_name : string)
 
 fun state_codec_read(item : state_codec<a>, entry : state_entry) : maybe<a>
   item.decode.(entry.version, entry.payload)
@@ -269,11 +277,17 @@ fun with_hook_scope(scope_name : string, action : () -> <hook_scope|e> a) : <hoo
 fun component_at(scope_name : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
   with_hook_scope(scope_name, render)
 
+fun with_feature_scope(group : string, key : string, action : () -> <hook_scope|e> a) : <hook_scope|e> a
+  push_feature_scope(group, key)
+  val result = action()
+  pop_hook_scope()
+  result
+
 // A feature root has absolute identity, so its state can survive layout moves,
 // temporary unmounts, and hot replacement. Public feature components should
 // expose their key when more than one instance can appear in the same tree.
 pub fun feature_root(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
-  component_at(component_local_path(group, key), render)
+  with_feature_scope(group, key, render)
 
 // A feature's persistent runtime key and its sibling VDOM key serve different
 // jobs. Keep the historical singleton VDOM key for the default instance while
@@ -288,6 +302,15 @@ pub fun feature_node_key(group : string, key : string, default_key : string = "p
 pub fun feature_dom_marker(group : string, key : string, name : string, default_key : string = "panel") : string
   val marker_name = normalize_slot_name(name)
   if key == default_key then marker_name else feature_node_key(group, key, default_key) ++ ":" ++ marker_name
+
+// Business components already declare their stable identity at `feature_root`.
+// Descendants can derive VDOM keys and DOM markers from that boundary instead
+// of forwarding the same `key` prop through every helper component.
+pub fun feature_key(default_key : string = "panel") : <hook_scope,div> string
+  resolve_feature_key(default_key)
+
+pub fun feature_marker(name : string, default_key : string = "panel") : <hook_scope,div> string
+  resolve_feature_marker(name, default_key)
 
 // A normal keyed child component is relative to its current parent scope.
 pub fun component(group : string, key : string, render : () -> <hook_scope|e> a) : <hook_scope|e> a
@@ -334,15 +357,6 @@ pub fun use_store<s,a>(spec : store_spec<s,a>, initial : s) : <hook_scope,local_
     update_named_state(entry_slot, codec, initial, fn(latest) spec.reduce.(latest, action))
   })
 
-// Store access outside a component render still speaks in typed state/actions.
-// Scope and serialization stay inside the framework boundary.
-pub fun current_store_state<s,a>(scope : string, spec : store_spec<s,a>, initial : s) : <local_state_read,div> s
-  use_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial)
-
-pub fun dispatch_store<s,a>(scope : string, spec : store_spec<s,a>, initial : s, action : a) : <action_observation,local_state_write,div> ()
-  emit_action(source = "component", target = scope, codec = spec.action_codec, action = action)
-  update_named_state(hook_named_state_slot(scope, spec.name), spec.state_codec, initial, fn(latest) spec.reduce.(latest, action))
-
 pub fun encode_store_action<s,a>(target : string, spec : store_spec<s,a>, action : a) : action_envelope
   encode_action(source = "component", target = target, codec = spec.action_codec, action = action)
 
@@ -353,14 +367,11 @@ pub fun decode_store_action<s,a>(spec : store_spec<s,a>, message : action_envelo
 pub fun read_store_state<s,a>(tree : list<state_entry>, scope_name : string, spec : store_spec<s,a>, initial : s) : <div> s
   read_named_local_state(tree, scope_name, spec.name, initial, spec.state_codec)
 
-pub fun clear_store_state<s,a>(scope_name : string, spec : store_spec<s,a>) : <local_state_write,div> ()
-  clear_named_local_state(scope_name, spec.name)
-
 pub fun state_effect(name : string, deps : list<string>, action : () -> io ()) : <hook_scope,hook_effects,div> ()
   use_named_effect(local_named_effect_slot(name), deps, action)
 
-// Business code that must coordinate a component's local state outside its
-// render body uses a semantic name, never a hook index or codec.
+// Stable paths are exposed for runtime inspection and tests. Business reducers
+// do not use them to reach into a child component's store.
 pub fun named_local_state_path(scope_name : string, state_name : string) : string
   state_slot/path(hook_named_state_slot(scope_name, state_name))
 
@@ -375,9 +386,6 @@ pub fun read_named_local_state<a>(tree : list<state_entry>, scope_name : string,
 
 pub fun assoc_named_local_state<a>(tree : list<state_entry>, scope_name : string, state_name : string, value : a, ?state_codec : state_codec<a>) : <div> list<state_entry>
   assoc_slot_value(tree, hook_named_state_slot(scope_name, state_name), value)
-
-fun clear_named_local_state(scope_name : string, state_name : string) : <local_state_write,div> ()
-  clear_slot(hook_named_state_slot(scope_name, state_name))
 
 pub fun component_listener_path(group_name : string, key_name : string, kind : dom_event_kind, name : string) : string
   state_slot/path(named_listener_slot(component_local_path(group_name, key_name), kind, name))
@@ -529,9 +537,6 @@ fun current_component_state_entries() : <component_runtime,div> list<state_entry
 fun replace_component_state_entries(tree : list<state_entry>) : <component_runtime,div> ()
   set_component_state_entries(tree)
 
-fun clear_slot(entry_slot : state_slot) : <local_state_write,div> ()
-  clear_local_state(state_slot/path(entry_slot))
-
 fun find_state(tree : list<state_entry>, path : string) : <div> maybe<state_entry>
   match tree
     Nil -> Nothing
@@ -675,6 +680,8 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
   var pending_effects := Nil
   var hook_stack : list<hook_frame> := Nil
   var current_hook_scope := ""
+  var current_feature_group := ""
+  var current_feature_key := ""
   var next_state_hook_index := 0
   var next_effect_hook_index := 0
   with return(result) (result, next_tree, pending_effects)
@@ -708,9 +715,29 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
     }
   with handler
     fun current_hook_scope_name() current_hook_scope
+    fun resolve_feature_key(default_key) feature_node_key(current_feature_group, current_feature_key, default_key)
+    fun resolve_feature_marker(name, default_key) feature_dom_marker(current_feature_group, current_feature_key, name, default_key)
     fun push_hook_scope(scope_name) {
-      hook_stack := Cons(Hook_frame(current_hook_scope, next_state_hook_index, next_effect_hook_index), hook_stack)
+      hook_stack := Cons(Hook_frame(
+        current_hook_scope,
+        next_state_hook_index,
+        next_effect_hook_index,
+        current_feature_group,
+        current_feature_key), hook_stack)
       current_hook_scope := scope_name
+      next_state_hook_index := 0
+      next_effect_hook_index := 0
+    }
+    fun push_feature_scope(group_name, key_name) {
+      hook_stack := Cons(Hook_frame(
+        current_hook_scope,
+        next_state_hook_index,
+        next_effect_hook_index,
+        current_feature_group,
+        current_feature_key), hook_stack)
+      current_hook_scope := component_local_path(group_name, key_name)
+      current_feature_group := group_name
+      current_feature_key := key_name
       next_state_hook_index := 0
       next_effect_hook_index := 0
     }
@@ -720,8 +747,10 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
         Cons(frame, rest) -> {
           hook_stack := rest
           match frame
-            Hook_frame(scope_name, state_index, effect_index) -> {
+            Hook_frame(scope_name, state_index, effect_index, feature_group_name, feature_key_name) -> {
               current_hook_scope := scope_name
+              current_feature_group := feature_group_name
+              current_feature_key := feature_key_name
               next_state_hook_index := state_index
               next_effect_hook_index := effect_index
             }

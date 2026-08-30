@@ -30,6 +30,7 @@
 - 单个 child 边界由 `component(...)` 表达；
 - 列表统一使用 `components(items, group = ..., key = ..., render = ...)`；
 - 单个 component/feature boundary 使用 trailing-lambda block（`component(group, key) { ... }`），让带 lifecycle 的调用在语法上与普通 view helper 明显区分；
+- `feature_root(...)` 安装 opaque ambient identity；内部 helper 用 `feature_key()` / `feature_marker(name)` 派生 VDOM key 与 DOM marker，不再转发 `panel_key`；
 - `component_effect<s,e>` 在应用侧绑定为 `app_view`，view 不再展开 framework effect row；
 - 业务组件不再手工拼装 listener/effect/store path；
 - state、effect 和 named listener 共享稳定的 keyed component scope。
@@ -41,7 +42,7 @@
 - 组件调用收敛为 `(state, dispatch) = use_store(spec, initial = ...)`，对齐 React `useReducer`；
 - `on_store_click(...)` / `on_store_input(...)` 使用 labelled `action + dispatch` 直接发 typed action；
 - binding record 与 `.current` / `.send` 不再暴露给业务 view；
-- 组件外协调通过 `current_store_state(...)` / `dispatch_store(...)`；
+- domain reducer/workflow 不反查或写入 child store；需要当前 draft 等值时，由组件放进 serializable domain action；
 - Todo editor 与 Lab incident local state 已完成迁移；
 - codec、slot 和 tree 编解码不再出现在普通 view 调用点。
 
@@ -53,6 +54,7 @@
 - Search 的 `on_input` / `on_submit` / `on_select` 与 Bridge 的 `on_select` callback props 已进入 typed registry，不再由 view 制造 raw listener payload；
 - Search item 与 Bridge case 使用稳定业务 id，过滤或重排不会改变同一交互的 registry identity；
 - `on_local_*` 只保留给直接 model 更新、分支逻辑或尚未 action 化的组件流程；
+- 同一事件需要同时发送 domain intent 和更新自身 store 时使用 `on_local_*`；Todo `Save_task(title)` 与 Lab `Send_reply(id, message)` 已采用这种完整 action；
 - Todo、Lab、Route 迁移保留原 semantic name/path；Search、Bridge 则有意从 legacy raw payload 收敛到稳定 registry path。
 
 ### Runtime ownership 与恢复
@@ -62,7 +64,7 @@
 - feature component 只返回 `vnode`，不再暴露 `(owner, vnode, effects, registry)` 四元组；
 - 整棵 app tree 在一个 runtime handler 内渲染，由 `run_runtime_render(...)` 在线程边界读写状态树；
 - feature 使用绝对 root scope，保持 HMR/localStorage snapshot path 不受 layout 移动影响；
-- feature 外协调 child store 时必须携带同一个 feature key，并只在 state 模块内部计算 scope path；
+- 业务模块已删除跨 feature key 读取/写入 child store 的 helper；scope/path API 只保留给 framework/runtime inspection 与 tests；
 - 父组件不再读取子组件 local store 做汇总；跨组件真正需要的数据应提升为 domain state；
 - 旧的 `demo/runtimebridge.kk` / `demo/runtimeowner.kk` 过渡层已经删除；
 - snapshot 使用 path + schema + version + payload；
@@ -90,8 +92,8 @@ button(text, class = ..., click = ...)
 input_text(value, input = ..., enter = ..., placeholder = ...)
 
 feature_root(group, key) { ... }
-feature_node_key(group = ..., key = ...)
-feature_dom_marker(group = ..., key = ..., name = ...)
+feature_key()
+feature_marker(name)
 component(group, key) { ... }
 components(items, group = ..., key = ..., render = ...)
 
@@ -107,15 +109,15 @@ on_local_input(name, handler)
 on_local_enter(name, handler)
 ```
 
-### Feature coordination 可以使用
+### Runtime/testing inspection 使用
 
 ```koka
-current_store_state(scope, spec, initial)
-dispatch_store(scope, spec, initial, action)
-clear_store_state(scope, spec)
+read_store_state(tree, scope, spec, initial)
+feature_node_key(group = ..., key = ...)
+feature_dom_marker(group = ..., key = ..., name = ...)
 ```
 
-这些 API 仍然 typed，但调用方必须有真实的跨组件协调需求。
+这些显式 identity/tree API 不进入业务 view 或 domain reducer。
 
 ### Framework/runtime 内部使用
 
@@ -149,7 +151,7 @@ clear_store_state(scope, spec)
 
 - 将普通组件需要的 `component/components/use_store/state_effect/on_*` 收敛到 facade；
 - 将 runner、registry、snapshot 与 tree inspection 移到 runtime/testing 模块；
-- 评估由 `feature_root` 安装 opaque feature identity context，让内部 helper 不再层层转发 `panel_key`，同时仍禁止业务 view 读取 raw scope path；
+- opaque feature identity 已进入 `feature_root`；下一步把显式 key/path inspection API 物理拆到 runtime/testing module；
 - 为 controlled component 固定“主 domain value 位置参数 + labelled callback/config props”的签名模板，避免每个 feature 再造 props adapter；
 - scope 计算只保留在确有跨组件协调的 state 模块；
 - reducer、codec、store spec 尽量同模块定义，view 只 import typed surface；
@@ -169,6 +171,12 @@ clear_store_state(scope, spec)
 - 区分 domain action 与 ephemeral component action；
 - 给敏感或不可重放 action 增加 capability/permission 边界；
 - 在工具协议稳定前，不把 runtime tree 的内部 wire format 当成公共 API。
+
+## GitHub 跟踪
+
+- [#7 Hide feature identity and remove cross-component store path coordination](https://github.com/Respo/explore-react.koka/issues/7)：当前实现批次；
+- [#8 Prototype action-replay component stores for HMR recovery](https://github.com/Respo/explore-react.koka/issues/8)：后续独立实验，不把外部 effect replay 混入本轮重构。
+- [#9 Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：由 framework lifecycle 处理永久移除的 keyed child，避免业务 reducer 重建 path 清理。
 
 ## 验证标准
 

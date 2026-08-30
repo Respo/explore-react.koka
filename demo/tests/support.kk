@@ -28,13 +28,16 @@ pub struct bridge_expectation
   detail_status : string
 
 pub fun inspect_task_editor(tree : list<state_entry>, item : task) : <div> task_editor_state
-  read_local_state(tree, fn() current_task_editor(item))
+  val scope = component_child_path(component_local_path("todo", "panel"), "tasks", task/id(item).show)
+  read_store_state(tree, scope, task_editor_store, Task_editor_state(False, item.title))
 
 pub fun inspect_incident_draft(tree : list<state_entry>, incident_id : int) : <div> string
-  read_local_state(tree, fn() current_incident_local_state(incident_id)).draft
+  val scope = component_child_path(component_local_path("lab", "panel"), "incidents", incident_id.show)
+  read_store_state(tree, scope, incident_local_store, Incident_local_state(False, "")).draft
 
 pub fun inspect_incident_expanded(tree : list<state_entry>, incident_id : int) : <div> bool
-  read_local_state(tree, fn() current_incident_local_state(incident_id)).expanded
+  val scope = component_child_path(component_local_path("lab", "panel"), "incidents", incident_id.show)
+  read_store_state(tree, scope, incident_local_store, Incident_local_state(False, "")).expanded
 
 pub fun maybe_text(target : maybe<string>) : string
   match target

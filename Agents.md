@@ -150,11 +150,11 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 - 单个 keyed boundary 优先写成 `component(group, key) { ... }` / `feature_root(group, key) { ... }`，用 Koka trailing-lambda 语法让 lifecycle 边界有鲜明特征；列表仍用 labelled `components(...)` 保持 key/render 映射清楚。
 - feature component 自己持有稳定的 `feature_root(...)`，签名返回 `app_view vnode`，并用 labelled `key` 隔离 local store、effect、listener 与 DOM marker；domain props 是否共享由调用方决定。不要暴露 runtime 四元组或新增 `run_*_panel` adapter。
 - 只有真正支持多实例隔离的 feature 才公开 `key`；app-owned singleton（例如全局 Dialog overlay）使用固定 identity，不提供只隔离一部分 runtime surface 的伪多实例参数。
-- feature 外协调 child store 时必须传递相同的 feature key；scope path 只在 state 模块内部计算，业务 view 不调用 raw scope/path API。
-- VDOM sibling key 与 DOM effect marker 分别使用 `feature_node_key(...)` / `feature_dom_marker(...)` 派生，不在每个组件文件重复实现默认 key 兼容与多实例前缀规则。
+- `feature_root(...)` 会安装 opaque feature identity；内部 helper 使用 `feature_key()` / `feature_marker(name)` 派生 VDOM sibling key 与 DOM effect marker，不层层转发 `panel_key`，也不读取 raw group/key。
+- `feature_node_key(...)` / `feature_dom_marker(...)` 只保留给 framework/runtime inspection 与 tests，不进入业务 view。
 - 整棵 app tree 只在集成层调用一次 `run_component(owner, group = ..., key = ..., render = fn(owner) ...)`，不要让 layout 手工合并 effects/registries。
 - 高层 view component 保持一个主要 domain value 位置参数，其余 callback/config props 使用 labelled arguments，例如 `on_input = ...`、`on_submit = ...`、`on_select = ...`。
-- 组件外协调状态时用 `current_store_state(...)` / `dispatch_store(...)` 这类 typed API；不要在业务模块复制 tree 编解码。
+- domain reducer/workflow 不读取或写入 child component store；需要 draft 等当前值时，把值放进 serializable domain action，再由组件在同一个 `on_local_*` handler 内协调自身 store transition。
 - action 必须可序列化，方便事件日志、恢复、回放，以及后续 agents/actions/store 工具链。
 
 推荐形态：
@@ -171,12 +171,15 @@ input_text(
     action = Change_draft,
     dispatch = dispatch_editor))
 
+val save_edit = fn(owner : model) {
+  val next = dispatch(Save_task(draft), owner)
+  if draft == "" then () else dispatch_editor(Finish_edit)
+  next
+}
+
 button(
   "Save",
-  click = on_action_click(
-    "save-edit",
-    action = Save_task,
-    dispatch = dispatch))
+  click = on_local_click("save-edit", save_edit))
 ```
 
 `state(...)` / `state_pair(...)` 可以用于没有业务 action 语义的简单实验，但新业务组件只要状态由用户事件更新，就优先定义 typed store。不要继续扩散显式 codec、hook index 或手工 path 的调用形式。
@@ -185,7 +188,7 @@ button(
 
 - domain action 与 component store action 统一编码为 `action_envelope`，字段为 `source`、`target`、`schema`、`version`、`payload`。
 - typed dispatch 必须在 reducer/workflow 前调用 `emit_action(...)`；调用时使用 labelled arguments，让 source/target/codec/action 的含义清楚可见。
-- component store 由 `use_store(...)` / `dispatch_store(...)` 自动发 observation，业务 view 不重复埋点。
+- component store 由 `use_store(...)` 返回的 dispatch 自动发 observation，业务 view 不重复埋点。
 - app/runtime 边界通过 `run_runtime_action_observed(...)` 获取有序 action 列表；不需要观察的测试或内部调用使用 `run_runtime_action(...)`。
 - observation 表示“已发送 intent”，不表示 reducer 成功或外部 effect 已提交。confirm 拒绝的 action 仍可被观察。
 - 未建立权限、effect response 和幂等策略前，不自动 replay，也不把 action log 混入 component-state snapshot。

@@ -1,8 +1,6 @@
 module demo/todo/state
 
-import demo/model
 import explore/react/action
-import explore/react/core
 import explore/react/state
 
 pub struct task_editor_state(editing : bool, draft : string)
@@ -58,23 +56,3 @@ pub val task_editor_store : store_spec<task_editor_state,task_editor_action> = S
     decode = decode_task_editor_action,
     encode = encode_task_editor_action),
   reduce = reduce_task_editor)
-
-fun task_component_key(item : task) : string
-  task/id(item).show
-
-fun task_scope_path(item : task, panel_key : string) : string
-  component_child_path(component_local_path("todo", panel_key), "tasks", task_component_key(item))
-
-pub fun current_task_editor(item : task, panel_key : string = "panel") : <local_state_read,div> task_editor_state
-  current_store_state(task_scope_path(item, panel_key), task_editor_store, Task_editor_state(False, item.title))
-
-pub fun dispatch_task_editor(item : task, action : task_editor_action, panel_key : string = "panel") : <action_observation,local_state_write,div> ()
-  dispatch_store(task_scope_path(item, panel_key), task_editor_store, Task_editor_state(False, item.title), action)
-
-pub fun clear_task_editor(item : task, panel_key : string = "panel") : <local_state_write,div> ()
-  clear_store_state(task_scope_path(item, panel_key), task_editor_store)
-
-pub fun clear_done_task_editors(tasks : list<task>, panel_key : string = "panel") : <local_state_write,div> ()
-  foreach(tasks, fn(item)
-    if item.done then clear_task_editor(item, panel_key = panel_key) else ()
-  )
