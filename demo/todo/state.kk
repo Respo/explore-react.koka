@@ -1,7 +1,6 @@
 module demo/todo/state
 
-import explore/react/action
-import explore/react/state
+import explore/react
 
 pub struct task_editor_state(editing : bool, draft : string)
 pub type task_editor_action

@@ -104,6 +104,8 @@
 ### 业务组件优先使用
 
 ```koka
+import explore/react
+
 div(children, class = ..., key = ...)
 button(text, class = ..., click = ...)
 input_text(value, input = ..., enter = ..., placeholder = ...)
@@ -155,31 +157,28 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 按用户风险与依赖顺序推进，不并行扩张公共 API：
 
-### 1. 版本化 runtime snapshot（#17）
+### 1. 单一 component-author import（#23）
 
-- 当前实现批次：完整 snapshot 已增加 `respo/runtime-snapshot|1` header，并兼容读取现有无 envelope 格式；
-- unknown/malformed 顶层版本回退空树，malformed entry 与 entry 非法编码只丢弃自身，不阻断 app boot；
-- entry 级 schema/version 校验保持不变，业务 view 不增加 snapshot 参数或 runtime import；
-- Koka compatibility tests、旧 snapshot 浏览器启动、整页 reload 与真实 Vite HMR replacement 恢复均已完成验收。
+- 当前实现批次：新增 `import explore/react`，只 re-export `core/action/state`；
+- 真实 demo business modules 迁移到单一入口，advanced host/tests 继续显式依赖 runtime/inspection/renderer；
+- `check:author-surface` 固定 re-export allowlist，并禁止业务模块退回三条内部 imports；
+- quick start、component author API、README 与开发指南同步单一入口。
 
-### 2. 定义 effect cleanup 生命周期（#18）
+### 2. 可运行 first-component 与错误路径（#24、#25）
 
-- 当前实现批次：`state_effect(...)` 保持轻量 trailing-lambda，`state_resource(...)` 显式声明 setup + cleanup；
-- deps change 先 cleanup 后 setup，ordinary child unmount 与 feature reset 释放对应 resource；
-- HMR 固定为 snapshot flush、旧 runtime dispose、新 runtime boot，cleanup closure 不进入 snapshot；
-- cleanup failure 记录 host error，但不阻断下一次 setup 或新 runtime boot；
-- 用一个真实 demo capability、deterministic tests 与浏览器 HMR 回归验证。
+- #24 提供 `yarn example:first-component`，让 typed store/action 的首次成功路径可以直接运行；
+- #25 将常见 Koka 编译错误整理为 symptom → cause → minimal fix cookbook；
+- 文档示例尽量引用持续编译的源码，减少 snippet drift。
 
-### 3. 发布 agent-safe store/action surface（#19）
+### 3. 安全 tooling surface（#19、#26）
 
-- 暴露可序列化的只读 catalog，不暴露 raw state entry、closure 或 tree write；
-- action dispatch 必须通过已注册 codec 校验，并复用现有 typed reducer/observation 链路；
-- 明确区分 domain action、ephemeral component action 与默认不可投递 capability；
+- #19 先定义可序列化 catalog 与 validated dispatch，不暴露 raw tree/closure；
+- #26 再基于 catalog 提供 dev-only read-only action/store inspector；
 - 自动 replay、完整权限 UI 和远程身份认证继续保持非目标。
 
 ### 持续约束
 
-- component authoring surface 保持在 `core/action/state`，不增加只做转发的 facade；
+- component authoring 实现保持在 `core/action/state`；顶层 `explore/react` 只做 `pub import` allowlist，不新增转发函数；
 - controlled component 继续使用“主 domain value 位置参数 + labelled callback/config props”；
 - 显式 key/path/store inspection 只有在能移动真实实现且不产生单行 wrapper 时再拆；
 - typed listener helper 只在出现第三个真实重复形态时扩展。
@@ -194,8 +193,12 @@ issue、PR 及影响结论的进度更新统一使用中英双语：标题采用
 - [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：已由 PR #15 合并；四个真实调用点共享 event-independent transition，并覆盖 action 顺序与浏览器回归；
 - [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：已由 PR #16 合并；四概念 quick start、单页 author API 与 advanced module import 边界已落地；
 - [#17 版本化 runtime snapshot 并定义兼容迁移 / Version runtime snapshots and define compatible migration](https://github.com/Respo/explore-react.koka/issues/17)：已由 PR #21 合并；snapshot envelope、legacy compatibility 与安全回退已落地；
-- [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：当前实现批次；effect/resource author API、host registry、HMR dispose、测试与文档已完成，等待 PR review；
-- [#19 发布 agent-safe store catalog 与校验 action dispatch / Publish an agent-safe store catalog and validated action dispatch](https://github.com/Respo/explore-react.koka/issues/19)：后续探索批次；在不暴露 raw runtime tree 的前提下服务 devtools/agents。
+- [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：已由 PR #22 合并；effect/resource author API、host registry、HMR dispose、测试与文档已落地；
+- [#23 提供单一组件作者导入入口 / Provide a single component-author import](https://github.com/Respo/explore-react.koka/issues/23)：当前开发批次，减少第一次组件所需的框架结构知识；
+- [#24 交付可运行的首个组件示例 / Ship a runnable first-component example](https://github.com/Respo/explore-react.koka/issues/24)：下一批次，提供可执行且持续编译的首次成功路径；
+- [#25 发布组件编译错误 cookbook / Publish a component compile-error cookbook](https://github.com/Respo/explore-react.koka/issues/25)：下一批次，按用户看到的错误组织诊断；
+- [#19 发布 agent-safe store catalog 与校验 action dispatch / Publish an agent-safe store catalog and validated action dispatch](https://github.com/Respo/explore-react.koka/issues/19)：后续探索批次；先稳定人类用户 author surface，再服务 tools/agents；
+- [#26 提供只读 action/store 调试面板 / Provide a read-only action/store inspector](https://github.com/Respo/explore-react.koka/issues/26)：依赖 #19 的安全 catalog，作为后续调试体验。
 
 ## 验证标准
 

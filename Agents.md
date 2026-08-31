@@ -16,7 +16,8 @@
 
 - 仓库根目录：就是 Koka 源码根目录，编译时直接把 repo root 当成模块搜索根。
 - `app.kk`：浏览器入口，只暴露 boot、事件桥接和 runtime snapshot 导入导出。
-- `explore/react/core.kk`、`action.kk`、`state.kk`：component authoring surface；业务 view 只从这里获取 elements、actions、stores、keyed lifecycle 与 effects。
+- `explore/react.kk`：普通组件唯一的 author import，只 re-export `core/action/state`，不包含 runtime/inspection/renderer。
+- `explore/react/core.kk`、`action.kk`、`state.kk`：component authoring 实现模块；advanced host/tests 可以按边界显式导入。
 - `explore/react/runtime.kk`：browser/app host 使用的 registered callback、scheduled effect 与 snapshot transport。
 - `explore/react/inspection.kk`：tests/devtools 使用的 VDOM、event registry 与 runtime entry 只读查询。
 - `explore/react/renderer.kk`：host/tests 使用的 render、diff 与 patch；不要导入业务 view。
@@ -152,7 +153,7 @@ chrome-devtools take_screenshot --fullPage --filePath .tmp-devtools-full.png
 
 组件交互状态以 **typed store + serializable actions** 为默认方案。它保留 React reducer 的简单心智模型，同时满足 Koka 严格类型、HMR 和 snapshot 恢复需求。
 
-- 普通业务 view 只导入 `explore/react/core`、`explore/react/action`、`explore/react/state` 中实际需要的模块；不得导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。
+- 普通业务 view 统一 `import explore/react`；不得导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。`core/action/state` 保持实现分层，但不再要求组件作者理解三条 import。
 
 - 业务组件用 `(state, dispatch) = use_store(spec, initial = ...)` 读取 reducer pair，不额外暴露 binding record。
 - UI 事件优先用 `on_store_click(name, action = ..., dispatch = ...)` / `on_store_input(...)` 发送 typed action，不直接操作 state tree。

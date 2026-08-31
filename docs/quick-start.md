@@ -2,14 +2,20 @@
 
 # 中文
 
-Respo 的日常组件代码只需要按顺序理解四件事：elements、keyed components、typed stores/actions 和 effects。下面用一个 FAQ feature 把它们串在一起。
+Respo 的日常组件代码从一个入口开始：
+
+```koka
+import explore/react
+```
+
+它只公开 component authoring surface，不包含 runtime、inspection 或 renderer。之后按顺序理解四件事：elements、keyed components、typed stores/actions 和 effects。下面用一个 FAQ feature 把它们串在一起。
 
 ## 1. 先写普通 view function
 
 element 的主要内容保持第一个位置参数，样式、key 和事件使用 labelled arguments：
 
 ```koka
-import explore/react/core
+import explore/react
 
 fun faq_answer(text : string) : vnode
   p(text, class = "faq-answer")
@@ -22,8 +28,7 @@ fun faq_answer(text : string) : vnode
 store 把 state、action、纯 reducer 和恢复方式定义在一起。这个 disclosure 只有一个 toggle action，所以使用内置 bool codec 的 snapshot store：
 
 ```koka
-import explore/react/action
-import explore/react/state
+import explore/react
 
 type disclosure_action
   Toggle_disclosure
@@ -97,14 +102,20 @@ fun faq_panel(items : list<faq_item>, key : string = "panel")
 
 # English
 
-Everyday Respo component code can be learned as four concepts in order: elements, keyed components, typed stores/actions, and effects. The following FAQ feature combines all four.
+Everyday Respo component code starts from one entry:
+
+```koka
+import explore/react
+```
+
+It exposes only the component-authoring surface, not runtime, inspection, or renderer. From there, learn four concepts in order: elements, keyed components, typed stores/actions, and effects. The following FAQ feature combines all four.
 
 ## 1. Start with an ordinary view function
 
 Keep primary element content positional and use labelled arguments for styling, keys, and events:
 
 ```koka
-import explore/react/core
+import explore/react
 
 fun faq_answer(text : string) : vnode
   p(text, class = "faq-answer")
@@ -117,8 +128,7 @@ An ordinary function call only extracts rendering. A helper without local state 
 A store groups its state, action, pure reducer, and recovery choice. This disclosure has one toggle action, so it uses a snapshot store with the built-in bool codec:
 
 ```koka
-import explore/react/action
-import explore/react/state
+import explore/react
 
 type disclosure_action
   Toggle_disclosure

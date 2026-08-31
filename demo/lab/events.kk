@@ -6,7 +6,7 @@ import demo/lab/workflow
 import library/bridge
 import library/maybe
 import library/search
-import explore/react/action
+import explore/react
 
 pub type lab_action
   Load_board

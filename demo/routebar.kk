@@ -2,8 +2,7 @@ module demo/routebar
 
 import demo/model
 import library/route
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun route_button(label : string, route_name : string, active : bool) : app_view vnode
   val class_name = if active then "button route-tab route-tab-active" else "button route-tab"

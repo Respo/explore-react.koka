@@ -9,6 +9,16 @@ state, and event dispatch.
 
 ## Start with component authoring
 
+Ordinary components need one framework import:
+
+```koka
+import explore/react
+```
+
+This entry exposes elements, typed actions/stores, keyed lifecycle, and effects;
+advanced runtime, inspection, and renderer modules remain explicit host/test
+imports.
+
 Learn the normal path as four tasks; runtime ownership and snapshot transport
 are advanced integration topics, not prerequisites:
 

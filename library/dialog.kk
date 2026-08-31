@@ -1,6 +1,6 @@
 module library/dialog
 
-import explore/react/core
+import explore/react
 
 pub type dialog_kind
   Dialog_none
