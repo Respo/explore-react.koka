@@ -6,7 +6,7 @@
 
 第一次回到仓库时，优先按这个顺序走：
 
-1. 先看 `package.json` 里的脚本，确认日常入口还是 `yarn dev`、`yarn build`、`yarn test:koka`。
+1. 先看 `package.json` 里的脚本，确认日常入口还是 `yarn dev`、`yarn build`、`yarn test:koka`；首次体验先运行 `yarn example:first-component`。
 2. 组件作者先看 `docs/quick-start.md` 与 `docs/component-authoring.md`；不要从 runtime snapshot 实现反推日常 API。
 3. 再看 `app.kk`，确认当前浏览器桥只暴露哪些 Koka 入口。
 4. 然后看 `explore/react/*` 和 `demo/*` 的边界：前者是库，后者是 demo 和业务。
@@ -22,6 +22,7 @@
 - `explore/react/inspection.kk`：tests/devtools 使用的 VDOM、event registry 与 runtime entry 只读查询。
 - `explore/react/renderer.kk`：host/tests 使用的 render、diff 与 patch；不要导入业务 view。
 - `demo/*`：具体 demo、布局、组件、路由和测试辅助。
+- `examples/first_component/*`：可直接执行的 component authoring 参考；`component.kk` 只使用公共入口，`main.kk` 是明确的 advanced host。
 - `demo/runtimeframe.kk`：app 边界的 runtime owner，同时持有业务 model 和框架 state tree。
 - `runtime/*`：只放 DOM 和系统边界的 FFI，不要把业务逻辑塞进来。
 - `scripts/build-koka.mjs`：从仓库根目录调用 Koka，输出到 `src/generated/koka`。
@@ -37,6 +38,7 @@ yarn dev
 yarn build
 yarn check
 yarn test:koka
+yarn example:first-component
 ```
 
 分别表示：
@@ -46,6 +48,7 @@ yarn test:koka
 - `yarn build`：Koka + Vite 全链路构建，改模块边界、入口导出、浏览器桥时先跑它。
 - `yarn check`：Koka 构建 + Vite bundling 检查，适合看宿主层是不是也被带坏了。
 - `yarn test:koka`：跑 Koka 侧快速测试，不依赖浏览器。
+- `yarn example:first-component`：编译并运行 first-component，打印初始 render、typed action 和 transition 后 render；同时校验该输出。
 
 模块缓存或生成产物异常时，优先用这个最便宜的重置：
 

@@ -9,7 +9,8 @@
     "dev": "yarn build:koka && vite",
     "build": "yarn build:koka && vite build",
     "check:author-surface": "node ./scripts/check-author-surface.mjs",
-    "check": "yarn check:author-surface && yarn build:koka && vite build",
+    "example:first-component": "node ./scripts/run-first-component.mjs",
+    "check": "yarn check:author-surface && yarn example:first-component && yarn build:koka && vite build",
     "test:koka": "node ./scripts/test-koka.mjs",
     "preview": "vite preview"
   },
