@@ -100,4 +100,4 @@ Snapshot 仍然只是临时 UI 状态的 best-effort 恢复机制，不替代 do
 - Todo/Lab 多实例 feature 的 state 和 listener identity 继续隔离；
 - HMR 与 `localStorage` 恢复链路继续保留 persistent feature state。
 
-effect cleanup callback 仍是独立问题：当前实现会删除过期 effect metadata，但还没有 React `useEffect` cleanup 那样的回调契约。
+effect metadata 被删除时，runtime 会调度对应 live resource cleanup。依赖变化、ordinary child unmount、feature reset 与 HMR dispose 的完整顺序见 [effect lifecycle](effect-lifecycle.md)。

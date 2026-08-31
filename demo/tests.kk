@@ -29,6 +29,9 @@ pub fun demo_test_results() : <div> list<test_result>
     generic_state_codec_test(),
     replay_empty_payload_test(),
     runtime_snapshot_format_test(),
+    effect_dependency_lifecycle_test(),
+    effect_unmount_lifecycle_test(),
+    effect_reset_and_persistence_test(),
     action_store_transition_test(),
     malformed_store_payload_test(),
     auto_hook_scope_test(),
@@ -82,3 +85,6 @@ pub fun demo_test_results() : <div> list<test_result>
     search_auto_cancelled_by_submit_test(),
     search_pick_starts_pending_test(),
   ]
+
+pub fun effect_runtime_test_result() : io test_result
+  statecases/effect_runtime_execution_test()

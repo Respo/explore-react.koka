@@ -94,7 +94,7 @@ mkdirSync(dirname(wrapperPath), { recursive: true });
 writeFileIfChanged(
   wrapperPath,
   [
-    `export { boot, boot__with__snapshot as bootWithSnapshot, dispatch__click__bridge as dispatchClick, dispatch__input__bridge as dispatchInput, dispatch__route__bridge as dispatchRoute, export__state__snapshot__bridge as exportStateSnapshot } from './koka/${entryFile}';`,
+    `export { boot, boot__with__snapshot as bootWithSnapshot, dispatch__click__bridge as dispatchClick, dispatch__input__bridge as dispatchInput, dispatch__route__bridge as dispatchRoute, dispose__runtime__bridge as disposeRuntime, export__state__snapshot__bridge as exportStateSnapshot } from './koka/${entryFile}';`,
     "",
   ].join("\n"),
 );

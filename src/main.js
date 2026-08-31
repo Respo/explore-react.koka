@@ -47,6 +47,10 @@ function loadSnapshot() {
   }
 }
 
+function disposeRuntime() {
+  runtime.disposeRuntime();
+}
+
 function installBridges() {
   window.__kokaDispatchClick = (payload) => {
     runtime.dispatchClick(payload);
@@ -75,6 +79,7 @@ if (import.meta.hot) {
       return;
     }
     const snapshot = flushSnapshot();
+    disposeRuntime();
     runtime = nextRuntime;
     installBridges();
     runtime.bootWithSnapshot("app", snapshot);
@@ -83,5 +88,6 @@ if (import.meta.hot) {
 
   import.meta.hot.dispose((data) => {
     data.stateSnapshot = flushSnapshot();
+    disposeRuntime();
   });
 }

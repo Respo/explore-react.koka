@@ -237,6 +237,9 @@ div([
 - parent component 不读取 child local store 做业务汇总；确实需要上层观察的数据提升到 domain model，纯调试统计放到 framework inspector。
 - 每次 app render 只安装一个 stateful component runtime；feature 通过 scoped vnode component 在同一 handler 内组合。
 - scheduled effects 按组件求值顺序收集；不要把跨组件的 effect 顺序当作数据依赖。
+- 不需要释放资源的 render 后工作使用 `state_effect("name", deps) { ... }`；subscription、observer、timer handle 等使用 labelled `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)`。
+- resource 在 deps 变化时先 cleanup 再 setup，并在 ordinary child unmount、`reset_feature(...)` 与 HMR dispose 时 cleanup；persistent feature 仅暂时隐藏时继续保留 resource。
+- cleanup closure 只存在于 host memory registry，不进入 snapshot；cleanup error 记录 host 日志且不得阻断后续 setup/boot。
 - snapshot entry 必须保留稳定 path、schema、version、payload；decoder 对 malformed payload、schema/version 不匹配安全回退。
 - 完整 snapshot 使用 `respo/runtime-snapshot|1` 顶层 header；decoder 兼容旧无 header 格式，unknown 顶层版本回退空树，单个 malformed entry 不影响其他合法 entry。
 - `respo/component-scope` 是 runtime-owned lifecycle marker，会进入 snapshot；业务模块不得读取、构造或修改。ordinary child sweep 由 framework visitation 驱动，不在 reducer 中重建 path。

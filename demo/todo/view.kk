@@ -17,12 +17,12 @@ fun task_item_view(item : task) : app_view vnode
   val start_edit = action_store_transition(Edit_task, dispatch = dispatch, store_action = Begin_edit(item.title), store = dispatch_editor)
   val save_edit = action_store_transition(Save_task(draft), dispatch = dispatch, store_action = Finish_edit, store = dispatch_editor, store_when = draft != "")
   val cancel_edit = action_store_transition(Cancel_task, dispatch = dispatch, store_action = Cancel_edit(item.title), store = dispatch_editor)
-  state_effect(name = "focus-editor", deps = [tid.show, if editing then "editing" else "idle"], action = fn() {
+  state_effect("focus-editor", [tid.show, if editing then "editing" else "idle"]) {
     if editing then {
       dom_focus(draft_marker)
       dom_flash(draft_marker, "effect-pulse")
     } else ()
-  })
+  }
   val detail = if editing then
       div([
         input_text(draft, key = draft_marker, class = "input", data_effect = draft_marker, input = on_store_input("draft-input", action = Change_draft, dispatch = dispatch_editor), enter = on_local_enter("save-edit", save_edit), placeholder = "Edit title locally before saving..."),
@@ -62,12 +62,12 @@ pub fun todo_panel(panel_state : todo_panel_state, key : string = "panel") : app
     val visible = visible_panel_tasks(panel_state)
     val total = total_task_count(panel_state)
     val should_focus_draft = has_recent_add_notice(panel_state)
-    state_effect(name = "focus-draft", deps = [panel_state.notice, panel_state.draft, total.show], action = fn() {
+    state_effect("focus-draft", [panel_state.notice, panel_state.draft, total.show]) {
       if should_focus_draft then dom_focus(draft_marker) else ()
-    })
-    state_effect(name = "pulse-notice", deps = [panel_state.notice, total.show], action = fn() {
+    }
+    state_effect("pulse-notice", [panel_state.notice, total.show]) {
       if should_focus_draft then dom_flash(note_marker, "effect-pulse") else ()
-    })
+    }
     panel([
       div([
         summary_chip("Tasks", total.show),

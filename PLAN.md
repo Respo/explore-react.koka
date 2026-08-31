@@ -117,7 +117,8 @@ components(items, group = ..., key = ..., render = ...)
 snapshot_store(name = ..., state_codec = ..., action_codec = ..., reduce = ...)
 replay_store(name = ..., action_codec = ..., replay = ..., reduce = ...)
 use_store(spec, initial = ...)
-state_effect(name = ..., deps = ..., action = ...)
+state_effect("name", deps) { ... }
+state_resource(name = ..., deps = ..., cleanup = ..., action = ...)
 on_store_click(name, action = ..., dispatch = ...)
 on_store_input(name, action = ..., dispatch = ...)
 on_action_click(name, action = ..., dispatch = ...)
@@ -163,9 +164,10 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ### 2. 定义 effect cleanup 生命周期（#18）
 
-- 为 component author 提供清晰的 setup + cleanup authoring shape；
-- 明确 deps change、ordinary child unmount、feature reset 与 runtime replacement 的 cleanup 顺序；
-- snapshot flush 先于旧 runtime cleanup，cleanup closure 不进入 snapshot；
+- 当前实现批次：`state_effect(...)` 保持轻量 trailing-lambda，`state_resource(...)` 显式声明 setup + cleanup；
+- deps change 先 cleanup 后 setup，ordinary child unmount 与 feature reset 释放对应 resource；
+- HMR 固定为 snapshot flush、旧 runtime dispose、新 runtime boot，cleanup closure 不进入 snapshot；
+- cleanup failure 记录 host error，但不阻断下一次 setup 或新 runtime boot；
 - 用一个真实 demo capability、deterministic tests 与浏览器 HMR 回归验证。
 
 ### 3. 发布 agent-safe store/action surface（#19）
@@ -191,8 +193,8 @@ issue、PR 及影响结论的进度更新统一使用中英双语：标题采用
 - [#9 定义不可达 child component store 的生命周期清理 / Define lifecycle cleanup for unreachable child component stores](https://github.com/Respo/explore-react.koka/issues/9)：已由 PR #11 合并；
 - [#12 简化组件事件中的 domain 与 local-store transition / Simplify domain and local-store transitions in component events](https://github.com/Respo/explore-react.koka/issues/12)：已由 PR #15 合并；四个真实调用点共享 event-independent transition，并覆盖 action 顺序与浏览器回归；
 - [#13 发布渐进式组件作者 API / Publish a progressive-disclosure component authoring surface](https://github.com/Respo/explore-react.koka/issues/13)：已由 PR #16 合并；四概念 quick start、单页 author API 与 advanced module import 边界已落地；
-- [#17 版本化 runtime snapshot 并定义兼容迁移 / Version runtime snapshots and define compatible migration](https://github.com/Respo/explore-react.koka/issues/17)：下一实现批次；先固定 snapshot envelope、legacy compatibility 与安全回退；
-- [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：排在 #17 之后，依赖明确的 HMR snapshot/boot 边界；
+- [#17 版本化 runtime snapshot 并定义兼容迁移 / Version runtime snapshots and define compatible migration](https://github.com/Respo/explore-react.koka/issues/17)：已由 PR #21 合并；snapshot envelope、legacy compatibility 与安全回退已落地；
+- [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：当前实现批次；effect/resource author API、host registry、HMR dispose、测试与文档已完成，等待 PR review；
 - [#19 发布 agent-safe store catalog 与校验 action dispatch / Publish an agent-safe store catalog and validated action dispatch](https://github.com/Respo/explore-react.koka/issues/19)：后续探索批次；在不暴露 raw runtime tree 的前提下服务 devtools/agents。
 
 ## 验证标准
