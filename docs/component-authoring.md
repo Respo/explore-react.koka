@@ -10,6 +10,8 @@ import explore/react
 
 该入口 re-export elements/VDOM、serializable action protocol，以及 component lifecycle/store/effect authoring。实现仍拆分在 `core`、`action`、`state`，但这不是组件作者的前置知识。不要在业务 view 中导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。
 
+先运行 [first component](quick-start.md)：它的 component module 是当前 public API 的可执行参考，host/runtime 细节单独留在 advanced entry。
+
 ## 1. Elements
 
 | 任务 | 推荐 API |
@@ -77,6 +79,8 @@ import explore/react
 ```
 
 It re-exports elements/VDOM, the serializable action protocol, and component lifecycle/store/effect authoring. Implementation remains split across `core`, `action`, and `state`, but component authors do not need that knowledge up front. Business views do not import `explore/react/runtime`, `explore/react/inspection`, or `explore/react/renderer`.
+
+Run the [first component](quick-start.md) first. Its component module is an executable reference for the current public API; host/runtime details stay in a separate advanced entry.
 
 ## 1. Elements
 

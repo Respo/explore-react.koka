@@ -2,95 +2,34 @@
 
 # 中文
 
-Respo 的日常组件代码从一个入口开始：
+第一条成功路径不是从 browser runtime 开始，而是运行一个真实组件：
+
+```bash
+yarn example:first-component
+```
+
+命令会编译并执行 [示例组件](../examples/first_component/component.kk)，再在内存中触发一次注册的 click listener。成功输出在一屏内包含：
+
+```text
+Initial UI: ... State: closed ... Show answer ...
+Typed action: Toggle_disclosure example/disclosure-action@1 payload=toggle
+Updated UI: ... State: open ... Hide answer ...
+```
+
+这是教程唯一的实现来源；文档不再复制另一份 FAQ 代码。组件文件只使用：
 
 ```koka
 import explore/react
 ```
 
-它只公开 component authoring surface，不包含 runtime、inspection 或 renderer。之后按顺序理解四件事：elements、keyed components、typed stores/actions 和 effects。下面用一个 FAQ feature 把它们串在一起。
+从该文件按顺序阅读四个概念即可：
 
-## 1. 先写普通 view function
+1. `disclosure_action` 和 `disclosure_action_codec`：每个用户 intent 都是可序列化 typed action。
+2. `disclosure_store`：把 state、codec、reducer 与 snapshot recovery 放在一起。
+3. `use_store(..., initial = False)`：返回熟悉的 `(state, dispatch)` pair。
+4. `feature_root(...)` 和 `on_store_click(...)`：声明生命周期边界，并把点击发送为 `Toggle_disclosure`。
 
-element 的主要内容保持第一个位置参数，样式、key 和事件使用 labelled arguments：
-
-```koka
-import explore/react
-
-fun faq_answer(text : string) : vnode
-  p(text, class = "faq-answer")
-```
-
-普通 function call 只负责拆分渲染，不创建组件 identity。没有 local state 的 helper 保持普通函数即可。
-
-## 2. 定义 typed store 与 serializable action
-
-store 把 state、action、纯 reducer 和恢复方式定义在一起。这个 disclosure 只有一个 toggle action，所以使用内置 bool codec 的 snapshot store：
-
-```koka
-import explore/react
-
-type disclosure_action
-  Toggle_disclosure
-
-val disclosure_action_codec : action_codec<disclosure_action> = Action_codec(
-  schema = "guide/disclosure-action",
-  version = 1,
-  decode = fn(version, payload) {
-    if version == 1 && payload == "t" then Just(Toggle_disclosure) else Nothing
-  },
-  encode = fn(_action) "t")
-
-val disclosure_store : store_spec<bool,disclosure_action> = snapshot_store(
-  name = "open",
-  state_codec = bool/state_codec,
-  action_codec = disclosure_action_codec,
-  reduce = fn(open, _action) not(open))
-```
-
-action schema/version 保持显式，方便 HMR 恢复、日志和未来 agent tooling。恢复方式只在 store 定义处选择；view 始终只拿 reducer pair。
-
-## 3. 在组件中使用 state/dispatch pair
-
-```koka
-struct faq_item(id : string, question : string, answer : string)
-
-fun faq_item_view(item : faq_item)
-  val (open, dispatch) = use_store(disclosure_store, initial = False)
-  state_effect("log-open", [open.show]) {
-    println(item.question ++ ": " ++ open.show)
-  }
-  article([
-    button(
-      item.question,
-      class = "faq-question",
-      click = on_store_click(
-        "toggle",
-        action = Toggle_disclosure,
-        dispatch = dispatch)),
-    if open then faq_answer(item.answer) else span(""),
-  ], key = item.id, class = "faq-item")
-```
-
-`use_store(...)` 返回熟悉的 `(state, dispatch)`。用户事件发送 typed action；`state_effect(...)` 用稳定 name 和 deps 描述不需要释放资源的 render 后工作。subscription、observer 等资源改用 `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)`，完整顺序见 [effect lifecycle](effect-lifecycle.md)。
-
-## 4. 用 keyed boundary 组成 feature
-
-```koka
-fun faq_panel(items : list<faq_item>, key : string = "panel")
-  feature_root("faq", key) {
-    section([
-      h2("Frequently asked questions"),
-      div(components(
-        items,
-        group = "items",
-        key = fn(item) item.id,
-        render = faq_item_view)),
-    ], key = feature_key(), class = "faq-panel")
-  }
-```
-
-`components(...)` 给每个 item 建立稳定 keyed child；删除或过滤 item 等同于 unmount。`feature_root(...)` 是页面级 persistent boundary，route 暂时离开或 JavaScript hot replacement 时可以保留 feature snapshot。trailing-lambda 让 lifecycle boundary 与普通 helper call 在视觉上明显不同。
+[执行 host](../examples/first_component/main.kk) 故意单独放在 advanced integration 边界：它才导入 renderer、inspection、runtime 和 state helpers，用来渲染、查找 listener、运行 action、再次 render。普通组件无需导入这些模块。
 
 ## 下一步
 
@@ -102,100 +41,39 @@ fun faq_panel(items : list<faq_item>, key : string = "panel")
 
 # English
 
-Everyday Respo component code starts from one entry:
+The first success path does not start with the browser runtime. Run one real component:
+
+```bash
+yarn example:first-component
+```
+
+The command compiles and executes the [example component](../examples/first_component/component.kk), then triggers one registered click listener in memory. Its one-screen success output includes:
+
+```text
+Initial UI: ... State: closed ... Show answer ...
+Typed action: Toggle_disclosure example/disclosure-action@1 payload=toggle
+Updated UI: ... State: open ... Hide answer ...
+```
+
+This is the tutorial's only implementation source; the documentation no longer copies a second FAQ implementation. The component file uses only:
 
 ```koka
 import explore/react
 ```
 
-It exposes only the component-authoring surface, not runtime, inspection, or renderer. From there, learn four concepts in order: elements, keyed components, typed stores/actions, and effects. The following FAQ feature combines all four.
+Read the file in this order to learn four concepts:
 
-## 1. Start with an ordinary view function
+1. `disclosure_action` and `disclosure_action_codec`: each user intent is a serializable typed action.
+2. `disclosure_store`: state, codec, reducer, and snapshot recovery belong together.
+3. `use_store(..., initial = False)`: returns the familiar `(state, dispatch)` pair.
+4. `feature_root(...)` and `on_store_click(...)`: declare the lifecycle boundary and send `Toggle_disclosure` for the click.
 
-Keep primary element content positional and use labelled arguments for styling, keys, and events:
-
-```koka
-import explore/react
-
-fun faq_answer(text : string) : vnode
-  p(text, class = "faq-answer")
-```
-
-An ordinary function call only extracts rendering. A helper without local state does not need component identity.
-
-## 2. Define a typed store and serializable action
-
-A store groups its state, action, pure reducer, and recovery choice. This disclosure has one toggle action, so it uses a snapshot store with the built-in bool codec:
-
-```koka
-import explore/react
-
-type disclosure_action
-  Toggle_disclosure
-
-val disclosure_action_codec : action_codec<disclosure_action> = Action_codec(
-  schema = "guide/disclosure-action",
-  version = 1,
-  decode = fn(version, payload) {
-    if version == 1 && payload == "t" then Just(Toggle_disclosure) else Nothing
-  },
-  encode = fn(_action) "t")
-
-val disclosure_store : store_spec<bool,disclosure_action> = snapshot_store(
-  name = "open",
-  state_codec = bool/state_codec,
-  action_codec = disclosure_action_codec,
-  reduce = fn(open, _action) not(open))
-```
-
-The action schema/version remains explicit for HMR recovery, logging, and future agent tooling. Recovery is selected only at the store definition; the view always receives the same reducer pair.
-
-## 3. Use the state/dispatch pair in a component
-
-```koka
-struct faq_item(id : string, question : string, answer : string)
-
-fun faq_item_view(item : faq_item)
-  val (open, dispatch) = use_store(disclosure_store, initial = False)
-  state_effect("log-open", [open.show]) {
-    println(item.question ++ ": " ++ open.show)
-  }
-  article([
-    button(
-      item.question,
-      class = "faq-question",
-      click = on_store_click(
-        "toggle",
-        action = Toggle_disclosure,
-        dispatch = dispatch)),
-    if open then faq_answer(item.answer) else span(""),
-  ], key = item.id, class = "faq-item")
-```
-
-`use_store(...)` returns the familiar `(state, dispatch)` pair. User events send typed actions; `state_effect(...)` describes post-render work that has no resource to release. Subscriptions, observers, and similar resources use `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)`; see [effect lifecycle](effect-lifecycle.md) for the complete order.
-
-## 4. Compose a feature with keyed boundaries
-
-```koka
-fun faq_panel(items : list<faq_item>, key : string = "panel")
-  feature_root("faq", key) {
-    section([
-      h2("Frequently asked questions"),
-      div(components(
-        items,
-        group = "items",
-        key = fn(item) item.id,
-        render = faq_item_view)),
-    ], key = feature_key(), class = "faq-panel")
-  }
-```
-
-`components(...)` creates a stable keyed child for every item; removing or filtering an item is an unmount. `feature_root(...)` is a page-level persistent boundary that can retain its feature snapshot across temporary route absence or JavaScript hot replacement. Trailing-lambda syntax makes lifecycle boundaries visually distinct from ordinary helper calls.
+The [executable host](../examples/first_component/main.kk) deliberately lives at the advanced-integration boundary. It alone imports renderer, inspection, runtime, and state helpers to render, find the listener, run the action, and render again. Ordinary components do not need those modules.
 
 ## Next steps
 
-- [Component author API](component-authoring.md): the preferred surface and decision rules on one page.
+- [Component author API](component-authoring.md): recommended surface and selection rules on one page.
 - [Store recovery](store-recovery.md): when to choose snapshot_store or replay_store.
-- [Component lifecycle](component-lifecycle.md): cleanup and retention for ordinary children and persistent features.
-- [Effect lifecycle](effect-lifecycle.md): setup, cleanup, and HMR ordering for effects and resources.
-- [Action/store transitions](action-store-transitions.md): coordinating a domain intent and component store in one event.
+- [Component lifecycle](component-lifecycle.md): cleanup/preservation semantics for ordinary children and persistent features.
+- [Effect lifecycle](effect-lifecycle.md): effect/resource setup, cleanup, and HMR order.
+- [Action/store transitions](action-store-transitions.md): coordinate a domain intent and component store in one event.

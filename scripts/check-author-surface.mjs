@@ -9,8 +9,8 @@ const allowedExports = [
   "pub import explore/react/action",
   "pub import explore/react/state",
 ];
-const forbiddenAuthorImport =
-  /^\s*(?:pub\s+)?import\s+(?:(?:[A-Za-z_][A-Za-z0-9_]*)\s*=\s*)?explore\/react\/(?:core|action|state)\s*(?:\/\/.*)?$/m;
+const forbiddenBusinessImport =
+  /^\s*(?:pub\s+)?import\s+(?:(?:[A-Za-z_][A-Za-z0-9_]*)\s*=\s*)?explore\/react\/(?:core|action|state|runtime|inspection|renderer)\s*(?:\/\/.*)?$/m;
 
 /** Collect Koka source files recursively from a known project directory. */
 function kokaFiles(directory) {
@@ -50,16 +50,18 @@ if (
 const businessFiles = [
   ...kokaFiles(resolve(rootDir, "library")),
   ...kokaFiles(resolve(rootDir, "demo")),
+  ...kokaFiles(resolve(rootDir, "examples")).filter((path) =>
+    relative(rootDir, path).split(sep).at(-1) === "component.kk"),
 ].filter((path) => !isAdvancedDemoModule(path));
 
 const violations = businessFiles.filter((path) => {
   const source = readFileSync(path, "utf8");
-  return forbiddenAuthorImport.test(source);
+  return forbiddenBusinessImport.test(source);
 });
 
 if (violations.length > 0) {
   throw new Error(
-    `Business modules must use import explore/react:\n${violations.join("\n")}`,
+    `Business modules must use import explore/react instead of a direct framework module:\n${violations.join("\n")}`,
   );
 }
 

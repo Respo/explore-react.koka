@@ -19,6 +19,16 @@ This entry exposes elements, typed actions/stores, keyed lifecycle, and effects;
 advanced runtime, inspection, and renderer modules remain explicit host/test
 imports.
 
+Run the first component before opening the browser demo:
+
+```bash
+yarn example:first-component
+```
+
+It compiles a public-authoring component, prints its initial render, sends one
+typed action, and prints the updated render. The [quick start](docs/quick-start.md)
+links to that compiled source instead of maintaining a second tutorial copy.
+
 Learn the normal path as four tasks; runtime ownership and snapshot transport
 are advanced integration topics, not prerequisites:
 
