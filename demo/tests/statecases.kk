@@ -172,6 +172,40 @@ pub fun replay_empty_payload_test() : <div> test_result
     Nothing -> False
   Test_result("Replay framing preserves empty action payload", "restored='" ++ restored ++ "', framed=" ++ framed.show, restored == "" && framed)
 
+pub fun runtime_snapshot_format_test() : <div> test_result
+  val source_tree = [
+    State_entry("feature/a|b", "tests/state", 3, "draft | value"),
+    State_entry("feature/effect", "respo/effect", 1, "render-only"),
+  ]
+  val encoded = encode_state_snapshot(source_tree)
+  val header_is_versioned = match split(encoded, "\n")
+    Cons(header, _entries) -> header == "respo/runtime-snapshot|1"
+    Nil -> False
+  val restored = decode_state_snapshot(encoded)
+  val roundtrip = match restored
+    [entry] -> entry.path == "feature/a|b" && entry.schema == "tests/state" && entry.version == 3 && entry.payload == "draft | value"
+    _ -> False
+  val empty_is_versioned = encode_state_snapshot(Nil) == "respo/runtime-snapshot|1"
+  val legacy = decode_state_snapshot("legacy/path|legacy/schema|2|legacy%20payload")
+  val legacy_compatible = match legacy
+    [entry] -> entry.path == "legacy/path" && entry.schema == "legacy/schema" && entry.version == 2 && entry.payload == "legacy payload"
+    _ -> False
+  val legacy_reencoded = match split(encode_state_snapshot(legacy), "\n")
+    Cons(header, _entries) -> header == "respo/runtime-snapshot|1"
+    Nil -> False
+  val partially_corrupt = decode_state_snapshot(
+    "respo/runtime-snapshot|1\nvalid/one|tests/one|1|first\nbad/path|tests/bad|1|bad%\nvalid/two|tests/two|2|second")
+  val partial_recovery = match partially_corrupt
+    [first, second] -> first.path == "valid/one" && first.payload == "first" && second.path == "valid/two" && second.version == 2
+    _ -> False
+  val unknown_version_safe = is-empty(decode_state_snapshot("respo/runtime-snapshot|9\nvalid/path|tests/state|1|value"))
+  val malformed_version_safe = is-empty(decode_state_snapshot("respo/runtime-snapshot|next\nvalid/path|tests/state|1|value"))
+  val malformed_header_safe = is-empty(decode_state_snapshot("respo/runtime-snapshot|1|extra\nvalid/path|tests/state|1|value"))
+  Test_result(
+    "Runtime snapshot envelope is versioned and backward compatible",
+    "header=" ++ header_is_versioned.show ++ ", legacy=" ++ legacy_compatible.show ++ ", partial=" ++ partially_corrupt.length.show ++ ", unknown=" ++ unknown_version_safe.show,
+    header_is_versioned && roundtrip && empty_is_versioned && legacy_compatible && legacy_reencoded && partial_recovery && unknown_version_safe && malformed_version_safe && malformed_header_safe)
+
 pub fun action_store_transition_test() : <div> test_result
   val scope_name = component_local_path("tests", "action-store-transition")
   val transition_codec : action_codec<string> = Action_codec(

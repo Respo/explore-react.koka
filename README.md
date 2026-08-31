@@ -421,13 +421,16 @@ deduplication, and recorded responses.
 
 ## State snapshots, HMR, and reloads
 
-The component runtime tree is encoded as versioned `state_entry` values. Each
-entry records its stable path, schema, version, and payload. Restore behavior is
-defensive:
+The component runtime tree is encoded with a `respo/runtime-snapshot|1`
+top-level header followed by versioned `state_entry` values. The envelope
+version owns the transport format; every entry still owns its stable path,
+schema, version, and payload. Restore behavior is defensive:
 
+- the decoder still accepts the legacy headerless four-field format;
+- unknown or malformed envelope versions safely restore an empty runtime tree;
+- a malformed entry is skipped without discarding other valid entries;
 - unknown schemas and unsupported versions fall back to the store's initial
   value;
-- malformed snapshot data is ignored instead of reaching a component decoder;
 - component state is restored only when its keyed scope and store schema still
   match;
 - replay stores use `respo/replay:<action-schema>` entries and rebuild state
@@ -435,8 +438,10 @@ defensive:
 - `respo/component-scope` metadata preserves ordinary-child ownership across
   HMR/reload so stale child branches can be swept on the next feature render.
 
-`src/main.js` persists the snapshot under
-`koka-respo:component-state:v1`. Writes are coalesced with
+`src/main.js` keeps using the existing
+`koka-respo:component-state:v1` localStorage key so legacy values remain
+discoverable; future wire-format evolution belongs to the snapshot envelope.
+Writes are coalesced with
 `requestAnimationFrame`, then flushed synchronously at the important
 boundaries:
 

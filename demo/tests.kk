@@ -28,6 +28,7 @@ pub fun demo_test_results() : <div> list<test_result>
     persistent_feature_lifecycle_test(),
     generic_state_codec_test(),
     replay_empty_payload_test(),
+    runtime_snapshot_format_test(),
     action_store_transition_test(),
     malformed_store_payload_test(),
     auto_hook_scope_test(),
