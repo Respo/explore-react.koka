@@ -166,8 +166,8 @@ feature_dom_marker(group = ..., key = ..., name = ...)
 
 ### 2. 可运行 first-component 与错误路径（#24、#25）
 
-- #24 是当前实现批次：提供 `yarn example:first-component`，让 typed store/action 的首次成功路径可以直接运行；
-- #25 将常见 Koka 编译错误整理为 symptom → cause → minimal fix cookbook；
+- #24 已由 PR #28 合并：`yarn example:first-component` 提供 typed store/action 的可执行首次成功路径；
+- #25 是当前开发批次：将常见 Koka 编译错误、framework authoring contract 与 recovery symptom 整理为 symptom → cause → minimal fix cookbook；
 - 文档示例尽量引用持续编译的源码，减少 snippet drift。
 
 ### 3. 安全 tooling surface（#19、#26）
@@ -195,8 +195,8 @@ issue、PR 及影响结论的进度更新统一使用中英双语：标题采用
 - [#17 版本化 runtime snapshot 并定义兼容迁移 / Version runtime snapshots and define compatible migration](https://github.com/Respo/explore-react.koka/issues/17)：已由 PR #21 合并；snapshot envelope、legacy compatibility 与安全回退已落地；
 - [#18 定义组件 effect cleanup 生命周期 / Define the component effect cleanup lifecycle](https://github.com/Respo/explore-react.koka/issues/18)：已由 PR #22 合并；effect/resource author API、host registry、HMR dispose、测试与文档已落地；
 - [#23 提供单一组件作者导入入口 / Provide a single component-author import](https://github.com/Respo/explore-react.koka/issues/23)：已由 PR #27 合并；单一 author import 与边界检查已落地；
-- [#24 交付可运行的首个组件示例 / Ship a runnable first-component example](https://github.com/Respo/explore-react.koka/issues/24)：当前开发批次，提供可执行且持续编译的首次成功路径；
-- [#25 发布组件编译错误 cookbook / Publish a component compile-error cookbook](https://github.com/Respo/explore-react.koka/issues/25)：下一批次，按用户看到的错误组织诊断；
+- [#24 交付可运行的首个组件示例 / Ship a runnable first-component example](https://github.com/Respo/explore-react.koka/issues/24)：已由 PR #28 合并；提供可执行且持续编译的首次成功路径；
+- [#25 发布组件编译错误 cookbook / Publish a component compile-error cookbook](https://github.com/Respo/explore-react.koka/issues/25)：当前开发批次；按用户看到的错误组织 Koka 编译、框架边界与恢复诊断；
 - [#19 发布 agent-safe store catalog 与校验 action dispatch / Publish an agent-safe store catalog and validated action dispatch](https://github.com/Respo/explore-react.koka/issues/19)：后续探索批次；先稳定人类用户 author surface，再服务 tools/agents；
 - [#26 提供只读 action/store 调试面板 / Provide a read-only action/store inspector](https://github.com/Respo/explore-react.koka/issues/26)：依赖 #19 的安全 catalog，作为后续调试体验。
 

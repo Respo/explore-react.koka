@@ -12,6 +12,8 @@ import explore/react
 
 先运行 [first component](quick-start.md)：它的 component module 是当前 public API 的可执行参考，host/runtime 细节单独留在 advanced entry。
 
+如果编译器报错、label 不匹配或 HMR 后 state 回退，先查 [Component 错误与诊断 cookbook](component-error-cookbook.md)。它会区分 Koka 类型错误、框架 authoring contract 和安全恢复回退。
+
 ## 1. Elements
 
 | 任务 | 推荐 API |
@@ -81,6 +83,8 @@ import explore/react
 It re-exports elements/VDOM, the serializable action protocol, and component lifecycle/store/effect authoring. Implementation remains split across `core`, `action`, and `state`, but component authors do not need that knowledge up front. Business views do not import `explore/react/runtime`, `explore/react/inspection`, or `explore/react/renderer`.
 
 Run the [first component](quick-start.md) first. Its component module is an executable reference for the current public API; host/runtime details stay in a separate advanced entry.
+
+For a compiler error, a mismatched label, or state that falls back after HMR, start with the [Component error and diagnosis cookbook](component-error-cookbook.md). It distinguishes Koka type errors, the framework authoring contract, and safe recovery fallback.
 
 ## 1. Elements
 
