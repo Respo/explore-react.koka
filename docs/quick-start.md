@@ -28,6 +28,8 @@ fun faq_answer(text : string) : vnode
 store 把 state、action、纯 reducer 和恢复方式定义在一起。这个 disclosure 只有一个 toggle action，所以使用内置 bool codec 的 snapshot store：
 
 ```koka
+import explore/react
+
 type disclosure_action
   Toggle_disclosure
 
@@ -126,6 +128,8 @@ An ordinary function call only extracts rendering. A helper without local state 
 A store groups its state, action, pure reducer, and recovery choice. This disclosure has one toggle action, so it uses a snapshot store with the built-in bool codec:
 
 ```koka
+import explore/react
+
 type disclosure_action
   Toggle_disclosure
 

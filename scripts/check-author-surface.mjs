@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -9,12 +9,10 @@ const allowedExports = [
   "pub import explore/react/action",
   "pub import explore/react/state",
 ];
-const forbiddenAuthorImports = [
-  "import explore/react/core",
-  "import explore/react/action",
-  "import explore/react/state",
-];
+const forbiddenAuthorImport =
+  /^\s*(?:pub\s+)?import\s+(?:(?:[A-Za-z_][A-Za-z0-9_]*)\s*=\s*)?explore\/react\/(?:core|action|state)\s*(?:\/\/.*)?$/m;
 
+/** Collect Koka source files recursively from a known project directory. */
 function kokaFiles(directory) {
   return readdirSync(directory).flatMap((name) => {
     const path = resolve(directory, name);
@@ -23,6 +21,15 @@ function kokaFiles(directory) {
     }
     return name.endsWith(".kk") ? [path] : [];
   });
+}
+
+/** Keep host-owned test and runtime modules out of the component-author check. */
+function isAdvancedDemoModule(path) {
+  const [topLevel, module] = relative(rootDir, path).split(sep);
+  return (
+    topLevel === "demo" &&
+    (module === "tests" || module === "tests.kk" || module === "runtimeframe.kk")
+  );
 }
 
 const authorEntry = readFileSync(authorEntryPath, "utf8");
@@ -43,16 +50,11 @@ if (
 const businessFiles = [
   ...kokaFiles(resolve(rootDir, "library")),
   ...kokaFiles(resolve(rootDir, "demo")),
-].filter(
-  (path) =>
-    !path.includes("/demo/tests/") &&
-    !path.endsWith("/demo/tests.kk") &&
-    !path.endsWith("/demo/runtimeframe.kk"),
-);
+].filter((path) => !isAdvancedDemoModule(path));
 
 const violations = businessFiles.filter((path) => {
   const source = readFileSync(path, "utf8");
-  return forbiddenAuthorImports.some((line) => source.includes(line));
+  return forbiddenAuthorImport.test(source);
 });
 
 if (violations.length > 0) {
