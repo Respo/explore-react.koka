@@ -44,8 +44,10 @@ are advanced integration topics, not prerequisites:
 
 Start with the bilingual [component quick start](docs/quick-start.md), then use
 the [one-page component author API](docs/component-authoring.md) as the normal
-reference. Persistent feature identity, recovery, and cross-domain/local
-transitions are introduced only when needed:
+reference. When an error interrupts that path, use the bilingual
+[component error and diagnosis cookbook](docs/component-error-cookbook.md).
+Persistent feature identity, recovery, and cross-domain/local transitions are
+introduced only when needed:
 
 - [component lifecycle](docs/component-lifecycle.md)
 - [effect lifecycle](docs/effect-lifecycle.md)

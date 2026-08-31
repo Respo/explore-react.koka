@@ -34,6 +34,7 @@ import explore/react
 ## 下一步
 
 - [Component author API](component-authoring.md)：一页内查看推荐 surface 和选择规则。
+- [Component 错误与诊断 cookbook](component-error-cookbook.md)：按 Koka 编译错误、框架边界和恢复诊断找到最小修复。
 - [Store recovery](store-recovery.md)：何时选择 snapshot_store 或 replay_store。
 - [Component lifecycle](component-lifecycle.md)：ordinary child 与 persistent feature 的清理/保留语义。
 - [Effect lifecycle](effect-lifecycle.md)：effect/resource 的 setup、cleanup 与 HMR 顺序。
@@ -73,6 +74,7 @@ The [executable host](../examples/first_component/main.kk) deliberately lives at
 ## Next steps
 
 - [Component author API](component-authoring.md): recommended surface and selection rules on one page.
+- [Component error and diagnosis cookbook](component-error-cookbook.md): find minimal fixes by Koka error, framework boundary, or recovery symptom.
 - [Store recovery](store-recovery.md): when to choose snapshot_store or replay_store.
 - [Component lifecycle](component-lifecycle.md): cleanup/preservation semantics for ordinary children and persistent features.
 - [Effect lifecycle](effect-lifecycle.md): effect/resource setup, cleanup, and HMR order.
