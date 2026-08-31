@@ -3,8 +3,7 @@ module demo/dialogs
 import library/dialog
 import demo/model
 import runtime/dom
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun apply_dialog_update(owner : model, next_update : dialog_update) : <div> model
   owner(dialog = next_update.dialog, notice = next_update.notice)

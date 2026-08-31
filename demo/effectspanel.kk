@@ -5,8 +5,7 @@ import demo/model
 import demo/tests/support
 import demo/shared
 import runtime/dom
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun tiny_task_list(key : string, tasks : list<task>) : <div> vnode
   if is-empty(tasks) then p("None", class = "empty") else ul(map(tasks, fn(item) li_text(item.title, key = "tiny-" ++ task/id(item).show)), key = key, class = "tiny-list")

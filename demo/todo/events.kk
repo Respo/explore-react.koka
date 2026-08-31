@@ -2,7 +2,7 @@ module demo/todo/events
 
 import demo/model
 import library/maybe
-import explore/react/action
+import explore/react
 
 pub type todo_action
   Add_task

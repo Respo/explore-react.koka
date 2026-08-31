@@ -1,6 +1,6 @@
 module library/search
 
-import explore/react/core
+import explore/react
 
 pub struct search_case
   query : string

@@ -2,7 +2,7 @@ module demo/testspanel
 
 import demo/tests/support
 import demo/shared
-import explore/react/core
+import explore/react
 
 fun test_item(item : test_result) : vnode
   val name = test_result/name(item)

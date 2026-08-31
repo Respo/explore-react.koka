@@ -7,8 +7,7 @@ import demo/shared
 import demo/lab/state
 import library/bridge
 import library/search
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun severity_class(item : incident) : string
   match item.severity

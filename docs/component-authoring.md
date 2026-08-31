@@ -2,15 +2,13 @@
 
 # 中文
 
-普通业务组件只导入三个模块：
+普通业务组件只导入一个稳定入口：
 
 ```koka
-import explore/react/core
-import explore/react/action
-import explore/react/state
+import explore/react
 ```
 
-这三个模块分别承载 elements/VDOM、serializable action protocol，以及 component lifecycle/store/effect authoring。不要在业务 view 中导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。
+该入口 re-export elements/VDOM、serializable action protocol，以及 component lifecycle/store/effect authoring。实现仍拆分在 `core`、`action`、`state`，但这不是组件作者的前置知识。不要在业务 view 中导入 `explore/react/runtime`、`explore/react/inspection` 或 `explore/react/renderer`。
 
 ## 1. Elements
 
@@ -72,15 +70,13 @@ effect name 在同一 component boundary 内保持稳定。`state_resource(...)`
 
 # English
 
-Ordinary business components import only three modules:
+Ordinary business components import one stable entry:
 
 ```koka
-import explore/react/core
-import explore/react/action
-import explore/react/state
+import explore/react
 ```
 
-They provide elements/VDOM, the serializable action protocol, and component lifecycle/store/effect authoring. Business views do not import `explore/react/runtime`, `explore/react/inspection`, or `explore/react/renderer`.
+It re-exports elements/VDOM, the serializable action protocol, and component lifecycle/store/effect authoring. Implementation remains split across `core`, `action`, and `state`, but component authors do not need that knowledge up front. Business views do not import `explore/react/runtime`, `explore/react/inspection`, or `explore/react/renderer`.
 
 ## 1. Elements
 

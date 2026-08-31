@@ -1,6 +1,6 @@
 module library/bridge
 
-import explore/react/core
+import explore/react
 
 pub effect fun request_bridge_resource(payload : string, delay : int) : ()
 

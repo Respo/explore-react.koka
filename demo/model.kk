@@ -4,8 +4,7 @@ import library/bridge
 import library/dialog
 import library/route
 import library/search
-import explore/react/action
-import explore/react/state
+import explore/react
 
 pub type incident_severity
   Severity_p1

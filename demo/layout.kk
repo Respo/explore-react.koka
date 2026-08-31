@@ -9,7 +9,7 @@ import demo/lab/view
 import demo/effectspanel
 import demo/testspanel
 import library/route
-import explore/react/core
+import explore/react
 
 fun intro_panel(item : model) : <div> vnode
   header([

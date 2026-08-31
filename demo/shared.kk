@@ -1,6 +1,6 @@
 module demo/shared
 
-import explore/react/core
+import explore/react
 
 pub fun panel(children : list<vnode>, title : string, note : string, key : string, class_name : string) : vnode
   section([

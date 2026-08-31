@@ -6,8 +6,7 @@ import demo/todo/events
 import demo/todo/state
 import demo/todo/viewmodel
 import runtime/dom
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun task_item_view(item : task) : app_view vnode
   val tid = task/id(item)

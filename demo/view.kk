@@ -5,8 +5,7 @@ import demo/model
 import demo/tests/support
 import demo/layout
 import library/dialog
-import explore/react/core
-import explore/react/state
+import explore/react
 
 fun append_overlay(shell_node : vnode, overlay_node : vnode) : <div> vnode
   shell_node(children = append(vnode/children(shell_node), [overlay_node]))

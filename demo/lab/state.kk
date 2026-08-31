@@ -1,7 +1,6 @@
 module demo/lab/state
 
-import explore/react/action
-import explore/react/state
+import explore/react
 
 pub struct incident_local_state(expanded : bool, draft : string)
 pub type incident_local_action
