@@ -26,4 +26,5 @@ pub fun run_runtime_render<a,e::E>(
 ) : <div> (runtime_frame, a, list<scheduled_effect>, event_registry<model,e>)
   val (rendered, next_tree) = with_component_runtime(runtime_frame/runtime_tree(frame), fn() render(runtime_frame/owner(frame)))
   val (next_owner, result, effects, registry) = rendered
-  (Runtime_frame(next_owner, next_tree), result, effects, registry)
+  val lifecycle_effects = reconcile_effect_transitions(runtime_frame/runtime_tree(frame), next_tree, effects)
+  (Runtime_frame(next_owner, next_tree), result, lifecycle_effects, registry)

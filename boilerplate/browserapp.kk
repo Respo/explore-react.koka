@@ -21,6 +21,7 @@ noinline val root_id_ref : ref<global,string> = unsafe-total { ref("app") }
 noinline val frame_ref : ref<global,runtime_frame> = unsafe-total { ref(current_runtime_frame(initial_model(), Nil)) }
 noinline val tree_ref : ref<global,vnode> = unsafe-total { ref(el("div", "root", Nil, Nil, "", Nil)) }
 noinline val handlers_ref : ref<global,event_registry<model,browser_event_effect>> = unsafe-total { ref(empty_event_registry()) }
+noinline val effect_registry_ref : ref<global,list<registered_effect>> = unsafe-total { ref(empty_effect_registry()) }
 
 fun with_browser_host(action : () -> <browser_host,div|e> a) : <div|e> a
   with handler
@@ -37,12 +38,15 @@ fun with_browser(action : () -> <browser_host,request_bridge_resource,div|e> a) 
   with fun request_bridge_resource(payload, delay) browser_schedule_click(payload, delay)
   with_browser_host(action)
 
-fun run_pending_effects(items : list<scheduled_effect>) : _e ()
+fun log_effect_error(message : string) : _e ()
+  browser_log("[explore-react effect] " ++ message)
+
+fun run_pending_effects(items : list<scheduled_effect>, registry : list<registered_effect>) : _e list<registered_effect>
   match items
-    Nil -> ()
+    Nil -> registry
     Cons(item, rest) -> {
-      run_scheduled_effect(item)
-      run_pending_effects(rest)
+      val next_registry = run_scheduled_effect(registry, item, log_effect_error)
+      run_pending_effects(rest, next_registry)
     }
 
 fun log_registry_warnings(messages : list<string>) : _e ()
@@ -74,7 +78,7 @@ fun commit(frame : runtime_frame) : _e ()
   handlers_ref := next_handlers
   log_registry_warnings(event_registry/warnings(next_handlers))
   log_registry_warnings(event_registry_semantic_warnings(previous_handlers, next_handlers))
-  run_pending_effects(pending_effects)
+  effect_registry_ref := run_pending_effects(pending_effects, !effect_registry_ref)
 
 fun next_click_frame(payload : string, frame : runtime_frame, handlers : event_registry<model,browser_event_effect>) : <div> (runtime_frame, list<action_envelope>)
   match find_registered_click(handlers, payload)
@@ -113,7 +117,11 @@ pub fun dispatch_route_bridge(route_name : string) : _e ()
 pub fun export_state_snapshot_bridge() : _e string
   encode_state_snapshot(runtime_frame/runtime_tree(!frame_ref))
 
+pub fun dispose_runtime_bridge() : _e ()
+  effect_registry_ref := dispose_effect_registry(!effect_registry_ref, log_effect_error)
+
 pub fun boot_with_snapshot(root_id : string, snapshot : string) : _e ()
+  dispose_runtime_bridge()
   root_id_ref := root_id
   set_root_id(root_id)
   attach_events(root_id)
@@ -127,7 +135,7 @@ pub fun boot_with_snapshot(root_id : string, snapshot : string) : _e ()
   mount_html(root_id, render_node("0", tree))
   browser_set_hash(next_model.route_name)
   log_registry_warnings(event_registry/warnings(handlers))
-  run_pending_effects(pending_effects)
+  effect_registry_ref := run_pending_effects(pending_effects, !effect_registry_ref)
 
 pub fun boot(root_id : string) : _e ()
   boot_with_snapshot(root_id, "")

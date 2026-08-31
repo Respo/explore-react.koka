@@ -18,8 +18,9 @@ are advanced integration topics, not prerequisites:
    child needs stable lifecycle identity.
 3. **Typed stores/actions:** define a serializable action and use
    `(state, dispatch) = use_store(spec, initial = ...)`.
-4. **Effects:** declare post-render work with `state_effect(...)`, and keep
-   browser/service capabilities as explicit Koka effects.
+4. **Effects:** use `state_effect(...)` for post-render work and
+   `state_resource(...)` for setup/cleanup lifecycles; keep browser/service
+   capabilities as explicit Koka effects.
 
 Start with the bilingual [component quick start](docs/quick-start.md), then use
 the [one-page component author API](docs/component-authoring.md) as the normal
@@ -27,6 +28,7 @@ reference. Persistent feature identity, recovery, and cross-domain/local
 transitions are introduced only when needed:
 
 - [component lifecycle](docs/component-lifecycle.md)
+- [effect lifecycle](docs/effect-lifecycle.md)
 - [store recovery](docs/store-recovery.md)
 - [action/store transitions](docs/action-store-transitions.md)
 
@@ -53,7 +55,8 @@ JavaScript hot replacement or be restored from `localStorage`.
 | local dispatch | `dispatch(action)` or `on_store_*` |
 | app reducer/action | `on_action_click(...)` / `on_action_input(...)` / `on_action_enter(...)` |
 | domain + local transition | `action_store_transition(...)` reused by `on_local_click(...)` / `on_local_enter(...)` |
-| `useEffect`-like hook | `state_effect(name=..., deps=..., action=...)` |
+| post-render effect | `state_effect("name", deps) { ... }` |
+| managed effect resource | `state_resource(name=..., deps=..., cleanup=..., action=...)` |
 | Context-like value | a Koka `val` effect |
 | browser/service capability | a Koka `fun` effect |
 | test double | an alternate effect handler |

@@ -9,6 +9,26 @@ import explore/react/state
 import explore/react/runtime
 import explore/react/inspection
 
+inline extern reset_effect_test_events() : io ()
+  js inline "(globalThis.__respoEffectTestEvents = [])"
+
+inline extern record_effect_test_event(message : string) : io ()
+  js inline "globalThis.__respoEffectTestEvents.push(#1)"
+
+inline extern read_effect_test_events() : io string
+  js inline "(globalThis.__respoEffectTestEvents || []).join('|')"
+
+inline extern fail_effect_test_cleanup(message : string) : io ()
+  js inline "(() => { globalThis.__respoEffectTestEvents.push(#1); throw new Error('expected cleanup failure'); })()"
+
+fun is_effect_install(item : scheduled_effect) : bool
+  match scheduled_effect/kind(item)
+    Effect_install -> True
+    Effect_cleanup -> False
+
+fun is_effect_cleanup(item : scheduled_effect) : bool
+  not(is_effect_install(item))
+
 pub fun state_tree_test() : <div> test_result
   val incident_scope = "lab/incidents/101"
   val tree = assoc_named_local_state(
@@ -206,6 +226,94 @@ pub fun runtime_snapshot_format_test() : <div> test_result
     "header=" ++ header_is_versioned.show ++ ", legacy=" ++ legacy_compatible.show ++ ", partial=" ++ partially_corrupt.length.show ++ ", unknown=" ++ unknown_version_safe.show,
     header_is_versioned && roundtrip && empty_is_versioned && legacy_compatible && legacy_reencoded && partial_recovery && unknown_version_safe && malformed_version_safe && malformed_header_safe)
 
+pub fun effect_dependency_lifecycle_test() : <div> test_result
+  val effect_path = named_local_effect_path(component_local_path("effects", "lifecycle"), "resource")
+  val (_first, first_tree, first_effects) = run_local_state(Nil, fn() feature_root("effects", "lifecycle") {
+    state_resource(name = "resource", deps = ["a"], cleanup = fn() (), action = fn() ())
+  })
+  val (_same, same_tree, same_effects) = run_local_state(first_tree, fn() feature_root("effects", "lifecycle") {
+    state_resource(name = "resource", deps = ["a"], cleanup = fn() (), action = fn() ())
+  })
+  val (_changed, _changed_tree, changed_effects) = run_local_state(same_tree, fn() feature_root("effects", "lifecycle") {
+    state_resource(name = "resource", deps = ["b"], cleanup = fn() (), action = fn() ())
+  })
+  val first_install = match first_effects
+    [item] -> scheduled_effect/path(item) == effect_path && is_effect_install(item)
+    _ -> False
+  val changed_install = match changed_effects
+    [item] -> scheduled_effect/path(item) == effect_path && is_effect_install(item)
+    _ -> False
+  Test_result(
+    "Effect dependencies schedule one managed replacement",
+    "first=" ++ first_effects.length.show ++ ", same=" ++ same_effects.length.show ++ ", changed=" ++ changed_effects.length.show,
+    first_install && is-empty(same_effects) && changed_install)
+
+pub fun effect_unmount_lifecycle_test() : <div> test_result
+  val feature_scope = component_local_path("effects", "unmount")
+  val child_scope = component_child_path(feature_scope, "rows", "left")
+  val effect_path = named_local_effect_path(child_scope, "resource")
+  val (_first, first_tree, _first_effects) = run_local_state(Nil, fn() feature_root("effects", "unmount") {
+    component("rows", "left") {
+      state_resource(name = "resource", deps = ["mounted"], cleanup = fn() (), action = fn() ())
+    }
+  })
+  val (_unmounted, next_tree, cleanup_effects) = run_local_state(first_tree, fn() feature_root("effects", "unmount") { () })
+  val cleanup_once = match cleanup_effects
+    [item] -> scheduled_effect/path(item) == effect_path && is_effect_cleanup(item)
+    _ -> False
+  Test_result(
+    "Ordinary component unmount schedules cleanup once",
+    "effects=" ++ cleanup_effects.length.show ++ ", entry=" ++ find(next_tree, fn(entry) entry.path == effect_path).is-just.show,
+    cleanup_once && find(next_tree, fn(entry) entry.path == effect_path).is-nothing)
+
+pub fun effect_reset_and_persistence_test() : <div> test_result
+  val effect_path = named_local_effect_path(component_local_path("effects", "persistent"), "resource")
+  val (_first, first_tree, _first_effects) = run_local_state(Nil, fn() feature_root("effects", "persistent") {
+    state_resource(name = "resource", deps = ["mounted"], cleanup = fn() (), action = fn() ())
+  })
+  val (_hidden, hidden_tree, hidden_effects) = run_local_state(first_tree, fn() feature_root("other", "panel") { () })
+  val (_reset, reset_tree) = with_component_runtime(hidden_tree, fn() reset_feature(group = "effects", key = "persistent"))
+  val reset_effects = reconcile_effect_transitions(hidden_tree, reset_tree, Nil)
+  val reset_once = match reset_effects
+    [item] -> scheduled_effect/path(item) == effect_path && is_effect_cleanup(item)
+    _ -> False
+  val hidden_preserved = is-empty(hidden_effects) && find(hidden_tree, fn(entry) entry.path == effect_path).is-just
+  Test_result(
+    "Persistent effects survive route hiding and clean up on reset",
+    "hidden=" ++ hidden_effects.length.show ++ ", reset=" ++ reset_effects.length.show,
+    hidden_preserved && reset_once)
+
+pub fun effect_runtime_execution_test() : io test_result
+  reset_effect_test_events()
+  val report_error = fn(_message) record_effect_test_event("error")
+  val first_registry = run_scheduled_effect(
+    empty_effect_registry(),
+    Scheduled_effect("tests/resource", Effect_install, fn() record_effect_test_event("setup-a"), fn() record_effect_test_event("cleanup-a")),
+    report_error)
+  val second_registry = run_scheduled_effect(
+    first_registry,
+    Scheduled_effect("tests/resource", Effect_install, fn() record_effect_test_event("setup-b"), fn() record_effect_test_event("cleanup-b")),
+    report_error)
+  val empty_registry = run_scheduled_effect(
+    second_registry,
+    Scheduled_effect("tests/resource", Effect_cleanup, fn() (), fn() ()),
+    report_error)
+  val failing_registry = run_scheduled_effect(
+    empty_registry,
+    Scheduled_effect("tests/failing", Effect_install, fn() record_effect_test_event("setup-fail"), fn() fail_effect_test_cleanup("cleanup-fail")),
+    report_error)
+  val recovered_registry = run_scheduled_effect(
+    failing_registry,
+    Scheduled_effect("tests/failing", Effect_install, fn() record_effect_test_event("setup-after"), fn() record_effect_test_event("cleanup-after")),
+    report_error)
+  dispose_effect_registry(recovered_registry, report_error)
+  val events = read_effect_test_events()
+  val expected = "setup-a|cleanup-a|setup-b|cleanup-b|setup-fail|cleanup-fail|error|setup-after|cleanup-after"
+  Test_result(
+    "Effect runtime cleans before setup and survives cleanup failure",
+    events,
+    events == expected)
+
 pub fun action_store_transition_test() : <div> test_result
   val scope_name = component_local_path("tests", "action-store-transition")
   val transition_codec : action_codec<string> = Action_codec(
@@ -289,7 +397,7 @@ pub fun auto_hook_scope_test() : <div> test_result
     })
     val right_result = feature_root(group = "tests", key = "right", render = fn() {
       val draft = state(name = "draft", initial = "right")
-      state_effect(name = "record-draft", deps = [draft], action = fn() ())
+      state_effect("record-draft", [draft]) { () }
       draft
     })
     (left_result, right_result)

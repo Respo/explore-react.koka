@@ -52,10 +52,9 @@ struct faq_item(id : string, question : string, answer : string)
 
 fun faq_item_view(item : faq_item)
   val (open, dispatch) = use_store(disclosure_store, initial = False)
-  state_effect(
-    name = "log-open",
-    deps = [open.show],
-    action = fn() println(item.question ++ ": " ++ open.show))
+  state_effect("log-open", [open.show]) {
+    println(item.question ++ ": " ++ open.show)
+  }
   article([
     button(
       item.question,
@@ -68,7 +67,7 @@ fun faq_item_view(item : faq_item)
   ], key = item.id, class = "faq-item")
 ```
 
-`use_store(...)` 返回熟悉的 `(state, dispatch)`。用户事件发送 typed action；`state_effect(...)` 用稳定 name 和 deps 描述 render 后的 effect。
+`use_store(...)` 返回熟悉的 `(state, dispatch)`。用户事件发送 typed action；`state_effect(...)` 用稳定 name 和 deps 描述不需要释放资源的 render 后工作。subscription、observer 等资源改用 `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)`，完整顺序见 [effect lifecycle](effect-lifecycle.md)。
 
 ## 4. 用 keyed boundary 组成 feature
 
@@ -93,6 +92,7 @@ fun faq_panel(items : list<faq_item>, key : string = "panel")
 - [Component author API](component-authoring.md)：一页内查看推荐 surface 和选择规则。
 - [Store recovery](store-recovery.md)：何时选择 snapshot_store 或 replay_store。
 - [Component lifecycle](component-lifecycle.md)：ordinary child 与 persistent feature 的清理/保留语义。
+- [Effect lifecycle](effect-lifecycle.md)：effect/resource 的 setup、cleanup 与 HMR 顺序。
 - [Action/store transitions](action-store-transitions.md)：同一事件如何协调 domain intent 与 component store。
 
 # English
@@ -147,10 +147,9 @@ struct faq_item(id : string, question : string, answer : string)
 
 fun faq_item_view(item : faq_item)
   val (open, dispatch) = use_store(disclosure_store, initial = False)
-  state_effect(
-    name = "log-open",
-    deps = [open.show],
-    action = fn() println(item.question ++ ": " ++ open.show))
+  state_effect("log-open", [open.show]) {
+    println(item.question ++ ": " ++ open.show)
+  }
   article([
     button(
       item.question,
@@ -163,7 +162,7 @@ fun faq_item_view(item : faq_item)
   ], key = item.id, class = "faq-item")
 ```
 
-`use_store(...)` returns the familiar `(state, dispatch)` pair. User events send typed actions; `state_effect(...)` describes a post-render effect with a stable name and dependencies.
+`use_store(...)` returns the familiar `(state, dispatch)` pair. User events send typed actions; `state_effect(...)` describes post-render work that has no resource to release. Subscriptions, observers, and similar resources use `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)`; see [effect lifecycle](effect-lifecycle.md) for the complete order.
 
 ## 4. Compose a feature with keyed boundaries
 
@@ -188,4 +187,5 @@ fun faq_panel(items : list<faq_item>, key : string = "panel")
 - [Component author API](component-authoring.md): the preferred surface and decision rules on one page.
 - [Store recovery](store-recovery.md): when to choose snapshot_store or replay_store.
 - [Component lifecycle](component-lifecycle.md): cleanup and retention for ordinary children and persistent features.
+- [Effect lifecycle](effect-lifecycle.md): setup, cleanup, and HMR ordering for effects and resources.
 - [Action/store transitions](action-store-transitions.md): coordinating a domain intent and component store in one event.

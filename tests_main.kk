@@ -9,5 +9,5 @@ fun result_line(item : test_result) : string
 fun print_results(results : list<test_result>) : console ()
   foreach(results, fn(item) println(result_line(item)))
 
-fun main() : <console,div> ()
-  print_results(demo_test_results())
+fun main() : io ()
+  print_results(append(demo_test_results(), [effect_runtime_test_result()]))

@@ -53,11 +53,12 @@ domain reducer 不读取 child store。组件需要提交 draft 时，把值放�
 
 | 任务 | 推荐 API |
 | --- | --- |
-| render 后按 deps 调度 | `state_effect(name = ..., deps = ..., action = ...)` |
+| render 后按 deps 调度 | `state_effect("name", deps) { ... }` |
+| setup + cleanup resource | `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)` |
 | browser/service capability | Koka `fun` effect + app/test handler |
 | ambient read-only value | Koka `val` effect |
 
-effect name 在同一 component boundary 内保持稳定。业务 workflow 显式声明 confirm、timer、request 等 capability；不要隐藏到 snapshot/replay 或 arbitrary callback 中。
+effect name 在同一 component boundary 内保持稳定。`state_resource(...)` 在 deps 变化时先 cleanup 再 setup，并在 ordinary unmount、feature reset 与 HMR dispose 时 cleanup；closure 不进入 snapshot。业务 workflow 显式声明 confirm、timer、request 等 capability；不要隐藏到 snapshot/replay 或 arbitrary callback 中。完整规则见 [effect lifecycle](effect-lifecycle.md)。
 
 ## Advanced modules
 
@@ -122,11 +123,12 @@ A domain reducer never reads a child store. Put a draft or other current compone
 
 | Task | Preferred API |
 | --- | --- |
-| Schedule after render by dependencies | `state_effect(name = ..., deps = ..., action = ...)` |
+| Schedule after render by dependencies | `state_effect("name", deps) { ... }` |
+| Setup + cleanup resource | `state_resource(name = ..., deps = ..., cleanup = ..., action = ...)` |
 | Browser/service capability | A Koka `fun` effect with app/test handlers |
 | Ambient read-only value | A Koka `val` effect |
 
-Keep effect names stable within one component boundary. Business workflows declare confirm, timer, request, and similar capabilities explicitly; do not hide them in snapshot/replay or arbitrary callbacks.
+Keep effect names stable within one component boundary. `state_resource(...)` cleans up before setup when dependencies change and cleans up on ordinary unmount, feature reset, and HMR dispose; closures never enter snapshots. Business workflows declare confirm, timer, request, and similar capabilities explicitly; do not hide them in snapshot/replay or arbitrary callbacks. See [effect lifecycle](effect-lifecycle.md) for the complete contract.
 
 ## Advanced modules
 

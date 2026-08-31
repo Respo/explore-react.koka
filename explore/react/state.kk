@@ -12,8 +12,8 @@ pub effect local_state_write
   fun clear_local_state(path : string) : ()
 
 pub effect hook_effects
-  fun use_named_effect(effect_slot : state_slot, deps : list<string>, action : () -> io ()) : ()
-  fun use_effect(deps : list<string>, action : () -> io ()) : ()
+  fun use_named_effect(effect_slot : state_slot, deps : list<string>, cleanup : () -> io (), action : () -> io ()) : ()
+  fun use_effect(deps : list<string>, cleanup : () -> io (), action : () -> io ()) : ()
 
 pub effect hook_scope
   fun push_hook_scope(scope_name : string) : ()
@@ -106,7 +106,17 @@ inline extern snapshot_unescape(text : string) : string
 inline extern snapshot_unescape_valid(text : string) : bool
   js inline "((s) => { try { decodeURIComponent(s); return true; } catch (_) { return false; } })(#1)"
 
-pub struct scheduled_effect(path : string, run : () -> io ())
+pub type scheduled_effect_kind
+  Effect_install
+  Effect_cleanup
+
+// Render produces lifecycle transitions, while the host owns the live cleanup
+// registry. Cleanup closures never enter the serializable component tree.
+pub struct scheduled_effect(
+  path : string,
+  kind : scheduled_effect_kind,
+  run : () -> io (),
+  cleanup : () -> io ())
 pub struct registered_click<s,e::E>(id : string, semantic_name : string, run : (s) -> <div|e> s)
 pub struct registered_input<s,e::E>(id : string, semantic_name : string, run : (string, s) -> <div|e> s)
 pub struct event_registry<s,e::E>(clicks : list<registered_click<s,e>>, inputs : list<registered_input<s,e>>, warnings : list<string>)
@@ -419,8 +429,22 @@ pub fun read_store_state<s,a>(tree : list<state_entry>, scope_name : string, spe
       reduce_replay_actions(initial, actions, spec.reduce)
     }
 
-pub fun state_effect(name : string, deps : list<string>, action : () -> io ()) : <hook_scope,hook_effects,div> ()
-  use_named_effect(local_named_effect_slot(name), deps, action)
+pub fun state_effect(
+  name : string,
+  deps : list<string>,
+  action : () -> io ()
+) : <hook_scope,hook_effects,div> ()
+  use_named_effect(local_named_effect_slot(name), deps, fn() (), action)
+
+// Managed resources make setup and release explicit instead of asking a Koka
+// callback to return two unrelated result shapes as in JavaScript useEffect.
+pub fun state_resource(
+  name : string,
+  deps : list<string>,
+  cleanup : () -> io (),
+  action : () -> io ()
+) : <hook_scope,hook_effects,div> ()
+  use_named_effect(local_named_effect_slot(name), deps, cleanup, action)
 
 // Stable paths are exposed for runtime inspection and tests. Business reducers
 // do not use them to reach into a child component's store.
@@ -719,6 +743,11 @@ fun append_scheduled_effect(items : list<scheduled_effect>, item : scheduled_eff
     Nil -> [item]
     Cons(head, rest) -> Cons(head, append_scheduled_effect(rest, item))
 
+fun append_scheduled_effects(items : list<scheduled_effect>, rest : list<scheduled_effect>) : <div> list<scheduled_effect>
+  match items
+    Nil -> rest
+    Cons(head, tail) -> Cons(head, append_scheduled_effects(tail, rest))
+
 fun effect_signature(deps : list<string>) : <div> string
   match deps
     Nil -> ""
@@ -727,6 +756,36 @@ fun effect_signature(deps : list<string>) : <div> string
 
 fun effect_entry(slot_item : state_slot, deps : list<string>) : <div> state_entry
   State_entry(state_slot/path(slot_item), "respo/effect", 1, effect_signature(deps))
+
+fun removed_effects(previous_tree : list<state_entry>, next_tree : list<state_entry>) : <div> list<scheduled_effect>
+  match previous_tree
+    Nil -> Nil
+    Cons(entry, rest) -> {
+      val removed_rest = removed_effects(rest, next_tree)
+      if entry.schema == "respo/effect" && find_state(next_tree, entry.path).is-nothing then
+        Cons(Scheduled_effect(entry.path, Effect_cleanup, fn() (), fn() ()), removed_rest)
+      else removed_rest
+    }
+
+fun has_scheduled_effect(items : list<scheduled_effect>, path : string) : <div> bool
+  any(items, fn(item) scheduled_effect/path(item) == path)
+
+fun append_missing_effects(items : list<scheduled_effect>, candidates : list<scheduled_effect>) : <div> list<scheduled_effect>
+  match candidates
+    Nil -> items
+    Cons(item, rest) -> {
+      val next_items = if has_scheduled_effect(items, scheduled_effect/path(item)) then items else append_scheduled_effect(items, item)
+      append_missing_effects(next_items, rest)
+    }
+
+// Integration render uses the original and final runtime trees so an explicit
+// reset that happens before component evaluation still releases live effects.
+pub fun reconcile_effect_transitions(
+  previous_tree : list<state_entry>,
+  next_tree : list<state_entry>,
+  pending : list<scheduled_effect>
+) : <div> list<scheduled_effect>
+  append_missing_effects(pending, removed_effects(previous_tree, next_tree))
 
 fun require_hook_scope(scope_name : string, kind : string) : string
   scope_name
@@ -759,7 +818,7 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
   var visited_component_scopes : list<string> := Nil
   var next_state_hook_index := 0
   var next_effect_hook_index := 0
-  with return(result) (result, next_tree, pending_effects)
+  with return(result) (result, next_tree, append_scheduled_effects(pending_effects, removed_effects(tree, next_tree)))
   with fun use_named_state(entry_slot, codec, fallback) state_value(next_tree, entry_slot, fallback, codec)
   with handler
     fun set_named_state(entry_slot, codec, value) next_tree := assoc_slot_value(next_tree, entry_slot, value, codec)
@@ -769,15 +828,15 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
     }
     fun clear_local_state(path) next_tree := clear_state(next_tree, path)
   with handler
-    fun use_named_effect(effect_slot, deps, callback) {
+    fun use_named_effect(effect_slot, deps, cleanup, callback) {
       val next_entry = effect_entry(effect_slot, deps)
       val changed = match find_state(next_tree, state_slot/path(effect_slot))
         Just(found) -> found.schema != next_entry.schema || found.version != next_entry.version || found.payload != next_entry.payload
         Nothing -> True
       next_tree := assoc_entry(next_tree, next_entry)
-      if changed then pending_effects := append_scheduled_effect(pending_effects, Scheduled_effect(state_slot/path(effect_slot), callback)) else ()
+      if changed then pending_effects := append_scheduled_effect(pending_effects, Scheduled_effect(state_slot/path(effect_slot), Effect_install, callback, cleanup)) else ()
     }
-    fun use_effect(deps, callback) {
+    fun use_effect(deps, cleanup, callback) {
       val scope_name = require_hook_scope(current_hook_scope, "use_effect")
       val effect_slot = hook_effect_slot(scope_name, next_effect_hook_index)
       next_effect_hook_index := next_effect_hook_index + 1
@@ -786,7 +845,7 @@ pub fun run_local_state(tree : list<state_entry>, action : () -> <local_state_re
         Just(found) -> found.schema != next_entry.schema || found.version != next_entry.version || found.payload != next_entry.payload
         Nothing -> True
       next_tree := assoc_entry(next_tree, next_entry)
-      if changed then pending_effects := append_scheduled_effect(pending_effects, Scheduled_effect(state_slot/path(effect_slot), callback)) else ()
+      if changed then pending_effects := append_scheduled_effect(pending_effects, Scheduled_effect(state_slot/path(effect_slot), Effect_install, callback, cleanup)) else ()
     }
   with handler
     fun current_hook_scope_name() current_hook_scope

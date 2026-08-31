@@ -104,8 +104,8 @@ pub fun dialog_overlay(owner : model) : app_view vnode
     val submit_action = on_local_click("submit-action", fn(next_owner : model) prompt_submit(next_owner))
     val submit_enter = on_local_enter("submit-action", fn(next_owner : model) prompt_submit(next_owner))
     val prompt_input = on_local_input("prompt-input", fn(value, next_owner : model) next_owner(dialog = update_dialog_prompt(next_owner.dialog, value)))
-    state_effect(name = "focus-dialog", deps = [current.kind.show_kind, current.prompt_error, current.title], action = fn() {
+    state_effect("focus-dialog", [current.kind.show_kind, current.prompt_error, current.title]) {
       if dialog_is_open(current) then dom_focus(dialog_focus_marker(current)) else ()
-    })
+    }
     dialog/render_dialog_overlay(current, spec = overlay_spec(current, prompt_input, submit_enter), controls = Dialog_overlay_controls(close_overlay, primary_action, submit_action))
   }

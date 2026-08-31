@@ -4,6 +4,7 @@ import demo/dialogs
 import demo/model
 import demo/tests/support
 import demo/shared
+import runtime/dom
 import explore/react/core
 import explore/react/state
 
@@ -27,6 +28,7 @@ fun core_effect_cases(item : model) : <div> list<vnode>
   val done = tasks_for("done", item.tasks)
   [
     effect_case("Confirm", "`confirm_action` is handled by the browser in app mode and by tests in-process.", p("Try Remove or Clear done in the todo panel.", class = "mono")),
+    effect_case("Effect lifecycle", "A named effect releases its previous resource before changed dependencies install the next one; HMR snapshots state before disposing live resources.", p("Switch Effects subroutes or rebuild Koka during development to observe setup and cleanup in the console.", class = "mono")),
     effect_case("Ambient filter", "The reducer stays unchanged while handlers project active or done subsets.", div([
       div([
         strong("Active"),
@@ -63,6 +65,11 @@ fun effects_panel_note(route_name : string) : string
 
 pub fun effects_panel(item : model, results : list<test_result>, key : string = "panel") : app_view vnode
   feature_root("effects", key) {
+    state_resource(
+      name = "route-session",
+      deps = [item.route_name],
+      cleanup = fn() browser_log("[demo effect] cleanup " ++ item.route_name),
+      action = fn() browser_log("[demo effect] setup " ++ item.route_name))
     val cases = route_effect_cases(item, results)
     panel([
       div(cases, class = "case-grid"),

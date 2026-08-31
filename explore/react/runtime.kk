@@ -15,8 +15,70 @@ pub fun run_registered_input<s,e::E>(item : registered_input<s,e>, value : strin
 pub fun empty_event_registry<s,e::E>() : event_registry<s,e>
   Event_registry(Nil, Nil, Nil)
 
-pub fun run_scheduled_effect(item : scheduled_effect) : io ()
-  item.run.()
+pub struct registered_effect(path : string, cleanup : () -> io ())
+
+pub fun empty_effect_registry() : list<registered_effect>
+  Nil
+
+fun remove_registered_effect(items : list<registered_effect>, path : string) : list<registered_effect>
+  match items
+    Nil -> Nil
+    Cons(item, rest) ->
+      if registered_effect/path(item) == path then rest
+      else Cons(item, remove_registered_effect(rest, path))
+
+fun find_registered_effect(items : list<registered_effect>, path : string) : maybe<registered_effect>
+  match items
+    Nil -> Nothing
+    Cons(item, rest) -> if registered_effect/path(item) == path then Just(item) else find_registered_effect(rest, path)
+
+fun run_cleanup_safely(action : () -> io ()) : io string
+  try(
+    fn() {
+      action()
+      ""
+    },
+    fn(problem) problem.message)
+
+fun cleanup_registered_effect(
+  registry : list<registered_effect>,
+  path : string,
+  on_error : (string) -> io ()
+) : io list<registered_effect>
+  match find_registered_effect(registry, path)
+    Nothing -> registry
+    Just(found) -> {
+      val message = run_cleanup_safely(registered_effect/cleanup(found))
+      if message != "" then on_error("Cleanup failed for `" ++ path ++ "`: " ++ message) else ()
+      remove_registered_effect(registry, path)
+    }
+
+// A changed dependency always releases the previous resource before setup.
+// Cleanup failures are reported but cannot block the next setup or HMR boot.
+pub fun run_scheduled_effect(
+  registry : list<registered_effect>,
+  item : scheduled_effect,
+  on_error : (string) -> io ()
+) : io list<registered_effect>
+  val next_registry = cleanup_registered_effect(registry, scheduled_effect/path(item), on_error)
+  match scheduled_effect/kind(item)
+    Effect_cleanup -> next_registry
+    Effect_install -> {
+      scheduled_effect/run(item).()
+      Cons(Registered_effect(scheduled_effect/path(item), scheduled_effect/cleanup(item)), next_registry)
+    }
+
+pub fun dispose_effect_registry(
+  registry : list<registered_effect>,
+  on_error : (string) -> io ()
+) : io list<registered_effect>
+  match registry
+    Nil -> Nil
+    Cons(item, rest) -> {
+      val message = run_cleanup_safely(registered_effect/cleanup(item))
+      if message != "" then on_error("Cleanup failed for `" ++ registered_effect/path(item) ++ "`: " ++ message) else ()
+      dispose_effect_registry(rest, on_error)
+    }
 
 inline extern runtime_snapshot_escape(text : string) : string
   js inline "encodeURIComponent(#1)"
