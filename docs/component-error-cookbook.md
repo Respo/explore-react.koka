@@ -149,7 +149,7 @@ pub fun disclosure_panel(key : string = "panel") : disclosure_view vnode
 2. `version` 与 `decode` 支持的版本一致；
 3. 旧 payload 改了形状时，decoder 显式迁移，或有意返回 `Nothing` 让该 store 重置。
 
-例如，将 codec 升到 v2 后仍只接受 v1，会让恢复安全回退：
+例如，升级到 v2 后保留 v1 migration path；未知版本会让恢复安全回退：
 
 ```koka
 decode = fn(version, payload) {
@@ -330,7 +330,7 @@ This is a safe snapshot-recovery fallback; it does not mean the domain model was
 2. `version` agrees with versions accepted by `decode`;
 3. when an old payload changes shape, the decoder explicitly migrates it or deliberately returns `Nothing` to reset that store.
 
-For example, upgrading a codec to v2 while accepting only v1 makes recovery safely fall back:
+For example, after upgrading to v2, keep a v1 migration path; unknown versions safely fall back:
 
 ```koka
 decode = fn(version, payload) {
